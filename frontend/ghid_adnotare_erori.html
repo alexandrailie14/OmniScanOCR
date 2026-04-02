@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ghid de adnotare a erorilor</title>
+  <style>
+    :root {
+      --text: #202124;
+      --muted: #5f6368;
+      --line: #d9dde3;
+      --header: #f4f6f8;
+      --accent: #1f4e79;
+      --bg: #ffffff;
+    }
+    @page {
+      size: A4 portrait;
+      margin: 1.4cm;
+    }
+    body {
+      font-family: "Times New Roman", Georgia, serif;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      line-height: 1.25;
+      font-size: 10pt;
+    }
+    h1 {
+      margin: 0 0 0.2cm 0;
+      color: var(--accent);
+      font-size: 18pt;
+      text-align: center;
+    }
+    .intro {
+      margin: 0 0 0.45cm 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 10pt;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin-bottom: 0.5cm;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 6px 7px;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      background: var(--header);
+      font-weight: bold;
+      text-align: left;
+    }
+    .code { width: 10%; }
+    .cat { width: 14%; }
+    .desc { width: 24%; }
+    .ex { width: 18%; }
+    .corr { width: 18%; }
+    .exp { width: 16%; }
+    .section-row td {
+      background: #eef3f8;
+      color: #173a59;
+      font-weight: bold;
+      font-size: 10.5pt;
+      padding: 7px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ghid de adnotare a erorilor</h1>
+  <p class="intro">Ghid sintetic pentru etichetarea standardizată a erorilor din producțiile scrise ale studenților străini.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="code">Cod</th>
+        <th class="cat">Categorie</th>
+        <th class="desc">Descriere operațională</th>
+        <th class="ex">Exemplu original</th>
+        <th class="corr">Forma corectă</th>
+        <th class="exp">Explicație posibilă</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="section-row"><td colspan="6">1. Ortografie și grafie</td></tr>
+      <tr><td>ORT-DIAC</td><td>Ortografie și grafie</td><td>Absența diacriticelor sau folosirea lor inadecvată</td><td>„fata invata romana”</td><td>„fata învață româna”</td><td>normă ortografică insuficient fixată</td></tr>
+      <tr><td>ORT-LIT</td><td>Ortografie și grafie</td><td>Substituirea unei litere în interiorul cuvântului</td><td>„copilul merge la scoală”</td><td>„copilul merge la școală”</td><td>confuzie grafemică</td></tr>
+      <tr><td>ORT-OMIS</td><td>Ortografie și grafie</td><td>Omiterea unei litere sau a unei silabe</td><td>„studeți”</td><td>„studenți”</td><td>control ortografic redus</td></tr>
+      <tr><td>ORT-ADAOS</td><td>Ortografie și grafie</td><td>Adăugarea nejustificată a unei litere sau a unei silabe</td><td>„românăă”</td><td>„română”</td><td>hipercorectitudine</td></tr>
+      <tr><td>ORT-DUBL</td><td>Ortografie și grafie</td><td>Dublarea nejustificată a unei litere</td><td>„appartament”</td><td>„apartament”</td><td>interferență din alte limbi</td></tr>
+      <tr><td>ORT-SEG</td><td>Ortografie și grafie</td><td>Segmentarea greșită a cuvintelor sau sudarea lor improprie</td><td>„de sigur”, „nustiu”</td><td>„desigur”, „nu știu”</td><td>necunoașterea lexicalizării</td></tr>
+      <tr><td>ORT-MAJ</td><td>Ortografie și grafie</td><td>Folosirea greșită a majusculelor și minusculilor</td><td>„romania”, „Luni merg...”</td><td>„România”, „luni merg...”</td><td>necunoașterea normei</td></tr>
+      <tr><td>ORT-APO</td><td>Ortografie și grafie</td><td>Utilizarea improprie a apostrofului sau a altor semne grafice</td><td>„s-a dus' acasă”</td><td>„s-a dus acasă”</td><td>transfer din practici informale</td></tr>
+      <tr><td>ORT-HIF</td><td>Ortografie și grafie</td><td>Omiterea sau folosirea incorectă a cratimei</td><td>„sa dus”, „l am văzut”</td><td>„s-a dus”, „l-am văzut”</td><td>dificultate morfosintactică</td></tr>
+      <tr><td>ORT-FON</td><td>Ortografie și grafie</td><td>Redarea cuvântului după pronunțare, nu după normă</td><td>„ie”, „numa”</td><td>„e”, „numai”</td><td>transcriere fonetică spontană</td></tr>
+
+      <tr class="section-row"><td colspan="6">2. Punctuație</td></tr>
+      <tr><td>PUNC-PUNCT</td><td>Punctuație</td><td>Lipsa punctului final sau delimitarea insuficientă a enunțului</td><td>„Eu învăț româna este greu”</td><td>„Eu învăț româna. Este greu.”</td><td>segmentare insuficientă a enunțului</td></tr>
+      <tr><td>PUNC-VIRG</td><td>Punctuație</td><td>Omiterea sau plasarea greșită a virgulei</td><td>„Când vin acasă mănânc”</td><td>„Când vin acasă, mănânc”</td><td>necunoașterea structurii frazei</td></tr>
+      <tr><td>PUNC-ENUM</td><td>Punctuație</td><td>Punctuație defectuoasă în enumerații</td><td>„îmi plac mere pere și prune”</td><td>„îmi plac mere, pere și prune”</td><td>transfer din oralitate</td></tr>
+      <tr><td>PUNC-INT</td><td>Punctuație</td><td>Lipsa ori utilizarea greșită a semnelor interogative sau exclamative</td><td>„Ce faci.”</td><td>„Ce faci?”</td><td>necunoașterea valorii enunțului</td></tr>
+      <tr><td>PUNC-CIT</td><td>Punctuație</td><td>Folosirea greșită a ghilimelelor, a celor două puncte sau a liniei de dialog</td><td>„Profesorul a spus, veniți”</td><td>„Profesorul a spus: «Veniți!»”</td><td>necunoașterea convențiilor textuale</td></tr>
+
+      <tr class="section-row"><td colspan="6">3. Morfologie nominală</td></tr>
+      <tr><td>MORF-GEN</td><td>Morfologie nominală</td><td>Atribuirea unui gen gramatical eronat substantivului</td><td>„un problem”</td><td>„o problemă”</td><td>transfer din L1</td></tr>
+      <tr><td>MORF-NR</td><td>Morfologie nominală</td><td>Formă greșită de număr gramatical</td><td>„două student”</td><td>„doi studenți” / „două studente”</td><td>acord insuficient stăpânit</td></tr>
+      <tr><td>MORF-CAZ</td><td>Morfologie nominală</td><td>Utilizarea incorectă a formei de caz</td><td>„cartea la profesorul”</td><td>„cartea profesorului”</td><td>dificultăți cu genitivul și dativul</td></tr>
+      <tr><td>MORF-ART-H</td><td>Morfologie nominală</td><td>Articol hotărât construit greșit</td><td>„băiatulul”, „fatăle”</td><td>„băiatul”, „fetele”</td><td>supra-generalizarea regulii</td></tr>
+      <tr><td>MORF-ART-N</td><td>Morfologie nominală</td><td>Articol nehotărât folosit greșit</td><td>„o băiat”</td><td>„un băiat”</td><td>acord de gen nestabilizat</td></tr>
+      <tr><td>MORF-ART-ZERO</td><td>Morfologie nominală</td><td>Omiterea articolului în contexte obligatorii</td><td>„Profesor dă temă”</td><td>„Profesorul dă temă” / „Un profesor dă temă”</td><td>interferență cu limbi fără articol</td></tr>
+      <tr><td>MORF-DEM</td><td>Morfologie nominală</td><td>Formă greșită a demonstrativului</td><td>„acest fată”</td><td>„această fată”</td><td>acord incomplet</td></tr>
+      <tr><td>MORF-POS</td><td>Morfologie nominală</td><td>Formă greșită a posesivului</td><td>„cartea meu”</td><td>„cartea mea”</td><td>dificultăți de acord</td></tr>
+      <tr><td>MORF-PRON</td><td>Morfologie nominală</td><td>Utilizarea greșită a pronumelui personal sau reflexiv</td><td>„eu mă place”</td><td>„mie îmi place”</td><td>transfer sintactic și semantic</td></tr>
+      <tr><td>MORF-CLIT</td><td>Morfologie nominală</td><td>Clitic pronominal omis, redundant sau selectat greșit</td><td>„am văzut-o pe el”</td><td>„l-am văzut”</td><td>dificultate a sistemului pronominal</td></tr>
+
+      <tr class="section-row"><td colspan="6">4. Morfologie adjectivală și acord</td></tr>
+      <tr><td>ACORD-SN</td><td>Acord</td><td>Neacord în interiorul grupului nominal</td><td>„o copil frumos”</td><td>„un copil frumos” / „o fată frumoasă”</td><td>acord parțial achiziționat</td></tr>
+      <tr><td>ACORD-ADJ</td><td>Acord</td><td>Adjectiv neacordat cu substantivul determinat</td><td>„fete frumos”</td><td>„fete frumoase”</td><td>nesiguranță morfologică</td></tr>
+      <tr><td>ACORD-NP</td><td>Acord</td><td>Acord greșit între subiect și predicat</td><td>„copiii merge”</td><td>„copiii merg”</td><td>integrare gramaticală dificilă</td></tr>
+      <tr><td>ACORD-PN</td><td>Acord</td><td>Acord greșit în structura cu nume predicativ</td><td>„fetele sunt frumos”</td><td>„fetele sunt frumoase”</td><td>reguli de acord insuficient stabilizate</td></tr>
+
+      <tr class="section-row"><td colspan="6">5. Sistem verbal</td></tr>
+      <tr><td>VERB-CONJ</td><td>Sistem verbal</td><td>Formă verbală greșită în paradigmă</td><td>„eu merge la facultate”</td><td>„eu merg la facultate”</td><td>conjugare nestăpânită</td></tr>
+      <tr><td>VERB-PERS</td><td>Sistem verbal</td><td>Marcă greșită de persoană verbală</td><td>„noi mergeți”</td><td>„noi mergem”</td><td>interferență paradigmatică</td></tr>
+      <tr><td>VERB-TIMP</td><td>Sistem verbal</td><td>Alegerea greșită a timpului verbal</td><td>„ieri merg la piață”</td><td>„ieri am mers la piață”</td><td>fixare insuficientă a valorilor temporale</td></tr>
+      <tr><td>VERB-MOD</td><td>Sistem verbal</td><td>Alegerea greșită a modului verbal</td><td>„vreau să mergi”</td><td>„vreau să merg”</td><td>dificultate cu subjonctivul</td></tr>
+      <tr><td>VERB-AUX</td><td>Sistem verbal</td><td>Auxiliar omis sau folosit greșit</td><td>„eu mers la școală”</td><td>„eu am mers la școală”</td><td>stăpânire incompletă a formelor compuse</td></tr>
+      <tr><td>VERB-INF-SUBJ</td><td>Sistem verbal</td><td>Alternanță greșită între infinitiv și subjonctiv</td><td>„pot să a merge”</td><td>„pot merge” / „vreau să merg”</td><td>concurență între construcții</td></tr>
+      <tr><td>VERB-REFL</td><td>Sistem verbal</td><td>Utilizare greșită a verbelor reflexive</td><td>„mă ducă”, „eu duc la școală”</td><td>„mă duc la școală”</td><td>dificultate cu verbele pronominale</td></tr>
+      <tr><td>VERB-PART</td><td>Sistem verbal</td><td>Participiu greșit, mai ales la verbele neregulate</td><td>„a scrivat”</td><td>„a scris”</td><td>memorare incompletă a formelor</td></tr>
+      <tr><td>VERB-SUPIN</td><td>Sistem verbal</td><td>Supin sau construcție apropiată folosită inadecvat</td><td>„am de scriind”</td><td>„am de scris”</td><td>categorie slab reprezentată în alte limbi</td></tr>
+      <tr><td>VERB-COP</td><td>Sistem verbal</td><td>Omiterea sau folosirea greșită a copulei „a fi”</td><td>„el student”</td><td>„el este student”</td><td>transfer din limbi cu copulă zero</td></tr>
+
+      <tr class="section-row"><td colspan="6">6. Prepoziții și regim</td></tr>
+      <tr><td>PREP-ALEG</td><td>Prepoziții și regim</td><td>Alegerea unei prepoziții nepotrivite contextului</td><td>„merg în facultate”</td><td>„merg la facultate”</td><td>învățare lexicală insuficient consolidată</td></tr>
+      <tr><td>PREP-OMIS</td><td>Prepoziții și regim</td><td>Omiterea unei prepoziții obligatorii</td><td>„mă gândesc viitor”</td><td>„mă gândesc la viitor”</td><td>regim verbal nestăpânit</td></tr>
+      <tr><td>PREP-ADAOS</td><td>Prepoziții și regim</td><td>Introducerea inutilă a unei prepoziții</td><td>„discut despre cu profesorul”</td><td>„discut cu profesorul”</td><td>supramarcare</td></tr>
+      <tr><td>PREP-REG</td><td>Prepoziții și regim</td><td>Regim prepozițional greșit al verbului, substantivului sau adjectivului</td><td>„depinde de la profesor”</td><td>„depinde de profesor”</td><td>transfer din altă limbă</td></tr>
+      <tr><td>PREP-PE</td><td>Prepoziții și regim</td><td>Utilizarea greșită a prepoziției „pe”</td><td>„văd pe cartea”</td><td>„văd cartea”</td><td>dificultăți privind obiectul direct animat</td></tr>
+
+      <tr class="section-row"><td colspan="6">7. Sintaxă propozițională</td></tr>
+      <tr><td>SINT-TOP</td><td>Sintaxă propozițională</td><td>Topică nefirească sau negramaticală</td><td>„Eu la bibliotecă mâine merg”</td><td>„Eu merg mâine la bibliotecă”</td><td>transfer din ordinea cuvintelor L1</td></tr>
+      <tr><td>SINT-NEG</td><td>Sintaxă propozițională</td><td>Construcție negativă greșită</td><td>„nu am nimic văzut”</td><td>„nu am văzut nimic”</td><td>organizarea deficitară a negației</td></tr>
+      <tr><td>SINT-INT</td><td>Sintaxă propozițională</td><td>Structură interogativă neadecvată</td><td>„Unde tu mergi?”</td><td>„Unde mergi?”</td><td>transfer din limbi cu subiect exprimat obligatoriu</td></tr>
+      <tr><td>SINT-SUB</td><td>Sintaxă propozițională</td><td>Subiect omis, redundant sau selectat impropriu</td><td>„Merge la curs și înțeleg”</td><td>„Merg la curs și înțeleg”</td><td>control instabil al persoanei verbale</td></tr>
+      <tr><td>SINT-OBJ</td><td>Sintaxă propozițională</td><td>Organizare defectuoasă a complementelor</td><td>„învăț limba română binele”</td><td>„învăț bine limba română”</td><td>plasare greșită a constituenților</td></tr>
+      <tr><td>SINT-REL</td><td>Sintaxă propozițională</td><td>Construcție relativă greșită</td><td>„cartea care eu citesc”</td><td>„cartea pe care o citesc”</td><td>dificultate cu relativul și cliticul</td></tr>
+      <tr><td>SINT-CONJ</td><td>Sintaxă propozițională</td><td>Conector sau subordonator folosit greșit</td><td>„știu că unde merge”</td><td>„știu unde merge”</td><td>confuzie între tipuri de subordonare</td></tr>
+      <tr><td>SINT-ELIP</td><td>Sintaxă propozițională</td><td>Elipsă nepermisă care afectează gramaticalitatea</td><td>„eu la magazin și apoi acasă”</td><td>„eu merg la magazin și apoi acasă”</td><td>comprimare excesivă a enunțului</td></tr>
+
+      <tr class="section-row"><td colspan="6">8. Lexic și selecție lexicală</td></tr>
+      <tr><td>LEX-CALC</td><td>Lexic și selecție lexicală</td><td>Calc lexical sau structural după limba maternă</td><td>„fac o fotografie cu ochii mei”</td><td>„văd cu ochii mei” / „fac o fotografie”</td><td>transfer direct din L1</td></tr>
+      <tr><td>LEX-CONF</td><td>Lexic și selecție lexicală</td><td>Confuzie între unități lexicale apropiate formal</td><td>„eventual” cu sens de „în final”</td><td>corectare în funcție de context</td><td>asemănare formală cu altă limbă</td></tr>
+      <tr><td>LEX-POLI</td><td>Lexic și selecție lexicală</td><td>Alegerea greșită a unui sens la un cuvânt polisemantic</td><td>„am luat un curs”</td><td>„am urmat un curs”</td><td>extindere semantică improprie</td></tr>
+      <tr><td>LEX-COL</td><td>Lexic și selecție lexicală</td><td>Colocație nenaturală sau neidiomatică</td><td>„beau medicamente”</td><td>„iau medicamente”</td><td>necunoașterea combinatoricii lexicale</td></tr>
+      <tr><td>LEX-REG</td><td>Lexic și selecție lexicală</td><td>Utilizarea unui lexic incompatibil cu registrul textului</td><td>„tipul acela predă”</td><td>„acel profesor predă”</td><td>delimitare insuficientă a registrelor</td></tr>
+      <tr><td>LEX-REP</td><td>Lexic și selecție lexicală</td><td>Repetiție lexicală excesivă</td><td>„orașul este frumos, orașul este mare...”</td><td>reformulare cu substituție lexicală</td><td>vocabular activ limitat</td></tr>
+      <tr><td>LEX-OMIS</td><td>Lexic și selecție lexicală</td><td>Omiterea unei unități lexicale obligatorii</td><td>„eu sunt student medicină”</td><td>„eu sunt student la medicină”</td><td>economie lexicală</td></tr>
+      <tr><td>LEX-INVENT</td><td>Lexic și selecție lexicală</td><td>Formare improprie a unui cuvânt inexistent sau aproximativ</td><td>„bibliotecarie”</td><td>corectarea depinde de context</td><td>strategie de aproximare lexicală</td></tr>
+
+      <tr class="section-row"><td colspan="6">9. Semantică și adecvare</td></tr>
+      <tr><td>SEM-INCOH</td><td>Semantică și adecvare</td><td>Enunț semantic incoerent</td><td>„am mâncat universitatea”</td><td>reformulare contextuală</td><td>selecție lexicală grav eronată</td></tr>
+      <tr><td>SEM-AMB</td><td>Semantică și adecvare</td><td>Ambiguitate neintenționată</td><td>„am văzut profesorul cu prietenul”</td><td>clarificare contextuală</td><td>structură insuficient dezambiguizată</td></tr>
+      <tr><td>SEM-RED</td><td>Semantică și adecvare</td><td>Redundanță semantică</td><td>„am coborât jos”</td><td>„am coborât”</td><td>transfer din oralitate</td></tr>
+      <tr><td>SEM-LOG</td><td>Semantică și adecvare</td><td>Relație logică greșită între propoziții sau segmente de discurs</td><td>„am fost bolnav deoarece am mers la curs”</td><td>reformulare după sens</td><td>alegere greșită a conectorului logic</td></tr>
+
+      <tr class="section-row"><td colspan="6">10. Coeziune și discurs</td></tr>
+      <tr><td>DISC-CON</td><td>Coeziune și discurs</td><td>Conector discursiv incompatibil cu poziția sau funcția textuală</td><td>„în concluzie” la începutul expunerii</td><td>conector adecvat contextului</td><td>control redus al organizatorilor discursivi</td></tr>
+      <tr><td>DISC-REF</td><td>Coeziune și discurs</td><td>Referință anaforică neclară sau ambiguă</td><td>„Maria a vorbit cu Ana și ea a plecat”</td><td>clarificare prin reluare nominală</td><td>coeziune referențială insuficient controlată</td></tr>
+      <tr><td>DISC-TEMP</td><td>Coeziune și discurs</td><td>Succesiune temporală inconsistentă la nivel textual</td><td>alternanță nemotivată între prezent și trecut</td><td>uniformizare temporală</td><td>plan discursiv instabil</td></tr>
+      <tr><td>DISC-TEMA</td><td>Coeziune și discurs</td><td>Ruptură tematică sau lipsă de progresie informațională</td><td>idei juxtapuse fără tranziție</td><td>inserarea de conectori și relații tematice explicite</td><td>competență textuală în formare</td></tr>
+      <tr><td>DISC-GEN</td><td>Coeziune și discurs</td><td>Nerespectarea convențiilor genului textual</td><td>scrisoare fără formulă de adresare</td><td>completare conform normei genului textual</td><td>necunoașterea modelului discursiv</td></tr>
+
+      <tr class="section-row"><td colspan="6">11. Interferență și strategii de învățare</td></tr>
+      <tr><td>INT-L1</td><td>Interferență și strategii</td><td>Transfer direct din limba maternă</td><td>structură copiată din L1</td><td>reformulare idiomatică în română</td><td>influența limbii de bază</td></tr>
+      <tr><td>INT-L2</td><td>Interferență și strategii</td><td>Transfer dintr-o altă limbă străină cunoscută</td><td>structură apropiată de franceză sau engleză</td><td>formă adecvată limbii române</td><td>activarea simultană a mai multor sisteme</td></tr>
+      <tr><td>HIPER</td><td>Interferență și strategii</td><td>Formă hipercorectă rezultată din supranormare</td><td>formă „prea corectată” și deviată de la uz</td><td>forma standard</td><td>presiune normativă</td></tr>
+      <tr><td>EVIT</td><td>Interferență și strategii</td><td>Evitare structurală prin simplificare excesivă</td><td>propoziții minimale pentru evitarea structurilor dificile</td><td>nu se corectează punctual; se consemnează ca strategie</td><td>competență limitată, dar adaptativă</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

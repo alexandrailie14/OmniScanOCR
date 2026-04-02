@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniScan Manuscrise</title>
+  <link rel="stylesheet" href="/static/studio-manuscrise.css?v=18" />
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <h1>OmniScan Manuscrise</h1>
+        <div class="hero-links" hidden aria-hidden="true">
+          <a class="ghost-link" href="/">Interfața OCR-Manuscris</a>
+          <a class="ghost-link" href="/studio-manuscrise">Interfața de adnotare</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel auth-panel" id="auth-panel">
+        <div class="panel-head">
+          <h2>Autentificare</h2>
+          <p>Folosește conturile deja configurate în aplicația existentă.</p>
+        </div>
+        <form id="login-form" class="auth-form">
+          <label>
+            <span>Username</span>
+            <input type="text" name="username" placeholder="" autocomplete="username" required />
+          </label>
+          <label>
+            <span>Parolă</span>
+            <input type="password" name="password" placeholder="****" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="primary-btn">Intră în studio</button>
+        </form>
+        <p id="login-error" class="error"></p>
+      </section>
+
+      <section class="studio hidden" id="studio-app">
+        <aside class="sidebar panel">
+          <div class="panel-head">
+            <div>
+              <h2>Bibliotecă PDF</h2>
+              <p>Încarcă documente și selectează rapid pagina de lucru.</p>
+            </div>
+            <button id="logout-btn" class="secondary-btn">Logout</button>
+          </div>
+
+          <div class="upload-card">
+            <label class="upload-field">
+              <span>PDF-uri</span>
+              <input type="file" id="file-input" accept=".pdf,application/pdf" multiple />
+            </label>
+            <button id="upload-btn" class="primary-btn">Upload</button>
+          </div>
+
+          <div class="library-meta">
+            <span id="user-pill" class="pill"></span>
+            <span id="file-count" class="muted">0 fișiere</span>
+          </div>
+
+          <div class="library-controls">
+            <label class="doc-select-wrap">
+              <span>Document activ</span>
+              <select id="file-select"></select>
+            </label>
+            <button id="load-latest-split" class="secondary-btn">Deschide ultimul split</button>
+            <button id="delete-current-file" class="secondary-btn">Șterge documentul curent</button>
+          </div>
+        </aside>
+
+        <section class="canvas-area">
+          <div class="toolbar panel">
+            <div class="toolbar-group">
+              <label>
+                <span>Pagină</span>
+                <input id="page-input" type="number" min="1" value="1" />
+              </label>
+              <label>
+                <span>OCR de la</span>
+                <input id="range-start" type="number" min="1" value="1" />
+              </label>
+              <label>
+                <span>până la</span>
+                <input id="range-end" type="number" min="1" value="1" />
+              </label>
+              <button id="prev-page" class="secondary-btn">Prev</button>
+              <button id="next-page" class="secondary-btn">Next</button>
+              <button id="rotate-page-left-90" class="secondary-btn">Rot pag -90°</button>
+              <button id="rotate-page-right-90" class="secondary-btn">Rot pag +90°</button>
+              <button id="clean-page-image" class="secondary-btn">Curăță pagină</button>
+              <button id="remove-split-pages" class="secondary-btn">Șterge pagini split</button>
+            </div>
+
+            <div class="toolbar-group">
+              <label>
+                <span>Zoom</span>
+                <input id="zoom-range" type="range" min="100" max="260" step="10" value="160" />
+              </label>
+              <span id="zoom-label" class="pill">160%</span>
+            </div>
+
+            <div class="toolbar-group">
+              <button id="toggle-split-tools" class="secondary-btn">Arată unelte split</button>
+            </div>
+
+            <div class="toolbar-group">
+              <label>
+                <span>Rotire</span>
+                <input id="rotation-input" type="number" step="0.1" min="-30" max="30" value="0" />
+              </label>
+              <div class="preset-group">
+                <button type="button" class="preset-btn" id="rot-minus-5">-5°</button>
+                <button type="button" class="preset-btn" id="rot-minus-1">-1°</button>
+                <button type="button" class="preset-btn" id="rot-plus-1">+1°</button>
+                <button type="button" class="preset-btn" id="rot-plus-5">+5°</button>
+                <button type="button" class="preset-btn" id="rot-reset">0°</button>
+              </div>
+              <label>
+                <span>Mod OCR</span>
+                <select id="ocr-mode">
+                  <option value="google_page">Document OCR</option>
+                  <option value="scan_page">Scan cleanup</option>
+                </select>
+              </label>
+              <button id="run-ocr" class="primary-btn">Rulează OCR</button>
+              <button id="rerun-ocr" class="secondary-btn">Refă OCR</button>
+            </div>
+          </div>
+
+          <section class="panel split-tools hidden" id="split-tools">
+            <div class="panel-head compact-head">
+              <div>
+                <h2>Split PDF</h2>
+                <p>Activează doar pentru PDF-urile cu două pagini pe foaie.</p>
+              </div>
+            </div>
+            <div class="split-tools-row">
+              <label>
+                <span>Split shift</span>
+                <input id="split-shift" type="number" step="1" value="18" />
+              </label>
+              <div class="preset-group" id="split-presets">
+                <button type="button" class="preset-btn" data-shift="-30">-30</button>
+                <button type="button" class="preset-btn" data-shift="-18">-18</button>
+                <button type="button" class="preset-btn" data-shift="-10">-10</button>
+                <button type="button" class="preset-btn" data-shift="0">0</button>
+                <button type="button" class="preset-btn" data-shift="10">10</button>
+                <button type="button" class="preset-btn" data-shift="18">18</button>
+                <button type="button" class="preset-btn" data-shift="30">30</button>
+              </div>
+              <button id="split-selection-pdf" class="secondary-btn">Split PDF selecție</button>
+              <button id="split-pdf" class="secondary-btn">Split tot PDF-ul</button>
+            </div>
+          </section>
+
+          <div class="preview-grid">
+            <section class="panel preview-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Preview</h2>
+                  <p id="doc-meta">Alege un PDF pentru a începe.</p>
+                </div>
+                <span id="page-badge" class="pill">Pagina -</span>
+              </div>
+              <div class="preview-stage" id="preview-stage">
+                <img id="page-image" alt="Preview pagină PDF" class="hidden" />
+                <div id="split-guide" class="split-guide hidden"></div>
+                <div id="preview-empty" class="empty-state">
+                  Selectează un document din stânga și apoi o pagină.
+                </div>
+              </div>
+            </section>
+
+            <section class="panel transcript-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Text extras</h2>
+                  <p id="ocr-status">OCR-ul nu a rulat încă.</p>
+                </div>
+                <div class="panel-actions">
+                  <button id="copy-text" class="secondary-btn">Copy</button>
+                  <button id="undo-text" class="secondary-btn">Undo</button>
+                  <button id="redo-text" class="secondary-btn">Redo</button>
+                  <button id="norm-text" class="secondary-btn">Norm</button>
+                  <button id="clean-text" class="secondary-btn">Curăță text</button>
+                  <button id="run-selection-ocr" class="primary-btn">OCR selecție</button>
+                  <button id="run-document-ocr" class="secondary-btn">OCR tot PDF-ul</button>
+                  <button id="toggle-annotation-focus" class="primary-btn">Începe adnotarea</button>
+                  <button id="export-articles" class="secondary-btn">Export TXT</button>
+                  <button id="import-json" class="secondary-btn">Import JSON</button>
+                  <button id="save-progress" class="secondary-btn">Salvează progres</button>
+                  <button id="export-json" class="secondary-btn">Export JSON</button>
+                  <button id="finish-annotation" class="primary-btn">Finalizează etichetarea</button>
+                </div>
+              </div>
+              <input id="import-json-input" type="file" accept=".json,application/json" class="hidden" />
+              <div class="progress-block hidden" id="ocr-progress-block">
+                <div class="progress-meta">
+                  <span id="ocr-progress-label">Se pregătește OCR-ul...</span>
+                  <span id="ocr-progress-value">0%</span>
+                </div>
+                <div class="progress-track">
+                  <div id="ocr-progress-bar" class="progress-bar"></div>
+                </div>
+              </div>
+              <details class="annotation-tools">
+                <summary class="annotation-tools-summary">
+                  <div>
+                    <strong>Etichetare lingvistică</strong>
+                    <span>Taxonomie vizuală pentru erori L2 în română</span>
+                  </div>
+                  <span class="pill subtle-pill">Deschide</span>
+                </summary>
+                <div class="annotation-tools-body">
+                  <div class="annotation-tools-head">
+                    <div>
+                      <h3>Grilă de adnotare</h3>
+                      <p>Selectezi fragmentul în editor, alegi eticheta din taxonomie, apoi îl adaugi în lista de adnotări. Textul rămâne curat, iar adnotările apar separat, colorat.</p>
+                    </div>
+                    <div class="annotation-active-card">
+                      <div class="annotation-active-row">
+                        <span class="muted">Etichetă activă</span>
+                        <a class="annotation-help-btn" href="/static/ghid_adnotare_erori.html" target="_blank" title="Deschide ghidul de adnotare">+</a>
+                      </div>
+                      <strong id="annotation-active-label">Alege un cod</strong>
+                    </div>
+                  </div>
+
+                  <div class="annotation-toolbar">
+                    <label>
+                      <span>Grup</span>
+                      <select id="annotation-group-main-select"></select>
+                    </label>
+                    <label>
+                      <span>Cod eroare</span>
+                      <select id="annotation-tag-select"></select>
+                    </label>
+                    <label>
+                      <span>Cod nou</span>
+                      <input id="annotation-tag-input" type="text" placeholder="ex. INT-DISCURS" />
+                    </label>
+                    <label class="annotation-color-field">
+                      <span>Culoare</span>
+                      <input id="annotation-tag-color" type="color" value="#a8573b" />
+                    </label>
+                    <button id="annotation-tag-add" class="secondary-btn" type="button">Adaugă cod</button>
+                  </div>
+
+                  <div class="annotation-meta-grid">
+                    <label>
+                      <span>Gravitate</span>
+                      <select id="annotation-severity">
+                        <option value="minora">minoră</option>
+                        <option value="medie" selected>medie</option>
+                        <option value="majora">majoră</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Nivel</span>
+                      <select id="annotation-level">
+                        <option value="litera">literă</option>
+                        <option value="cuvant" selected>cuvânt</option>
+                        <option value="grup_nominal">grup nominal</option>
+                        <option value="propozitie">propoziție</option>
+                        <option value="text">text</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Cauză probabilă</span>
+                      <select id="annotation-cause">
+                        <option value="transfer_l1" selected>transfer L1</option>
+                        <option value="supra_generalizare">supra-generalizare</option>
+                        <option value="omisiune">omisiune</option>
+                        <option value="hipercorectitudine">hipercorectitudine</option>
+                        <option value="lacuna_lexicala">lacună lexicală</option>
+                        <option value="performanta">performanță</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Corectabilitate</span>
+                      <select id="annotation-difficulty">
+                        <option value="usor">ușor</option>
+                        <option value="mediu" selected>mediu</option>
+                        <option value="dificil">dificil</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Siguranță adnotare</span>
+                      <select id="annotation-confidence">
+                        <option value="cert" selected>cert</option>
+                        <option value="probabil">probabil</option>
+                        <option value="incert">incert</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="annotation-actions">
+                    <button id="annotation-apply-tag" class="primary-btn" type="button">Adaugă adnotare pe selecție</button>
+                    <button id="annotation-undo-tag" class="secondary-btn" type="button">Undo etichetă</button>
+                    <button id="annotation-remove-tag" class="secondary-btn" type="button">Șterge adnotarea selectată</button>
+                  </div>
+                </div>
+              </details>
+              <textarea id="ocr-output" placeholder="Textul extras va apărea aici..."></textarea>
+              <div id="annotation-quick-panel" class="annotation-quick-panel hidden">
+                <div class="annotation-quick-head">
+                  <strong>Adnotare rapidă</strong>
+                  <span id="annotation-selection-label" class="muted">Selectează un fragment</span>
+                </div>
+                <div class="annotation-quick-grid">
+                  <label>
+                    <span>Grupare</span>
+                    <select id="annotation-group-select"></select>
+                  </label>
+                  <label>
+                    <span>Cod eroare</span>
+                    <select id="annotation-code-select"></select>
+                  </label>
+                  <button id="annotation-quick-add" class="primary-btn" type="button">Adaugă</button>
+                </div>
+              </div>
+              <section class="annotation-results">
+                <div class="annotation-results-head">
+                  <h3>Preview adnotări</h3>
+                  <span id="annotation-count" class="pill">0 adnotări</span>
+                </div>
+                <div id="annotation-preview" class="annotation-preview"></div>
+                <div id="annotation-records" class="annotation-records"></div>
+              </section>
+              <div class="result-links">
+                <a id="export-link" class="ghost-link hidden" target="_blank">Deschide PDF exportat</a>
+                <a id="json-link" class="ghost-link hidden" target="_blank">Deschide JSON exportat</a>
+              </div>
+              <p id="articles-status" class="muted"></p>
+              <div id="articles-actions" class="articles-actions hidden">
+                <button id="view-exported-docs" class="secondary-btn" type="button">Verifică documente exportate</button>
+              </div>
+              <div id="exported-articles-wrap" class="exported-articles hidden">
+                <p id="articles-folder" class="muted"></p>
+                <div id="exported-articles-list" class="exported-articles-list"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/studio-manuscrise.js?v=18"></script>
+</body>
+</html>

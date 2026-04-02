@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Filtrare Etichete</title>
+  <link rel="stylesheet" href="/static/styles.css?v=38" />
+</head>
+<body>
+  <div class="app filters-page">
+    <header class="topbar card">
+      <h1>Filtrare Etichete</h1>
+      <div class="inline">
+        <a class="button-link" href="/">Înapoi la Editor</a>
+        <button id="logout-btn" class="secondary">Logout</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="filter-toolbar">
+        <label>Document:</label>
+        <select id="doc-select"></select>
+
+        <label>Scope:</label>
+        <select id="scope-select">
+          <option value="document">Tot documentul</option>
+          <option value="page">Doar pagina</option>
+        </select>
+
+        <label>Pagină:</label>
+        <input id="page-input" type="number" min="1" value="1" />
+
+        <label>Sigle:</label>
+        <button id="tag-toggle" type="button">Alege filtre</button>
+        <div id="tag-menu" class="filter-menu hidden"></div>
+
+        <button id="run-filter" type="button">Filtrează</button>
+        <button id="export-txt" type="button">Export TXT</button>
+        <button id="export-csv" type="button">Export CSV</button>
+      </div>
+
+      <div class="filter-toolbar">
+        <input id="docs-input" type="file" accept=".txt,text/plain" multiple class="hidden" />
+        <button id="docs-upload-btn" type="button">Upload documente TXT</button>
+        <label>Mod docs:</label>
+        <select id="docs-mode">
+          <option value="merge">Merge</option>
+          <option value="overwrite">Overwrite</option>
+        </select>
+
+        <input id="sources-input" type="file" accept=".txt,.zip,text/plain,application/zip" multiple class="hidden" />
+        <button id="sources-upload-btn" type="button">Upload surse TXT</button>
+        <label>Mod surse:</label>
+        <select id="sources-mode">
+          <option value="merge">Merge</option>
+          <option value="overwrite">Overwrite</option>
+        </select>
+        <span id="status" class="muted"></span>
+      </div>
+
+      <div id="results-meta" class="muted">Apasă „Filtrează”.</div>
+      <div id="results" class="filter-results"></div>
+    </section>
+  </div>
+
+  <script src="/static/filters.js?v=38"></script>
+</body>
+</html>

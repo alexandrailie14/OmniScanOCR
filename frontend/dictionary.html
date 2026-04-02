@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Statistici dicționar</title>
+  <link rel="stylesheet" href="/static/dictionary.css?v=43" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="kicker">Statistici dicționar</p>
+        <h1>Statistici dicționar</h1>
+        <p class="subtitle">Interfață de lucru pentru statistica intrărilor și maparea lor la articolul complet din dicționar.</p>
+      </div>
+      <div class="hero-actions">
+        <a id="homeLink" class="secondary-link" href="/">Înapoi la OmniScan</a>
+        <button id="logoutButton" class="secondary-button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <section class="stats-grid" id="statsGrid" hidden>
+      <article class="stat-card">
+        <span class="stat-label">Total intrări</span>
+        <strong id="totalEntries" class="stat-value">0</strong>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">Leme</span>
+        <strong id="lemmaEntries" class="stat-value">0</strong>
+      </article>
+      <article class="stat-card">
+        <span class="stat-label">Variante</span>
+        <strong id="variantEntries" class="stat-value">0</strong>
+      </article>
+    </section>
+
+    <section class="panel" id="posPanel" hidden>
+      <div class="table-header">
+        <h2>Părți de vorbire</h2>
+        <p class="status-text">Selectează una sau mai multe categorii pentru filtrare. O intrare cu mai multe părți de vorbire este numărată la toate.</p>
+      </div>
+      <div class="pos-layout">
+        <div class="chart-card">
+          <h3>Distribuție POS</h3>
+          <div class="chart-row">
+            <div id="posDonut" class="pos-donut"></div>
+            <div id="posLegend" class="pos-legend"></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>
+            <span class="type-header-inline">
+              <span>Lungimea intrărilor</span>
+              <details class="type-filter-dropdown">
+                <summary aria-label="Filtru lungime"></summary>
+                <div class="type-filter-inline">
+                  <button id="lengthFilterAll" class="type-filter active" type="button">Toate</button>
+                  <button id="lengthFilterLemma" class="type-filter" type="button">Leme</button>
+                  <button id="lengthFilterVariant" class="type-filter" type="button">Variante</button>
+                </div>
+              </details>
+            </span>
+          </h3>
+          <div class="chart-row">
+            <div id="lengthDonut" class="pos-donut"></div>
+            <div class="length-hover-card">
+              <h3 id="lengthHoverTerm">Intrare</h3>
+              <p id="lengthHoverWords" class="status-text">Număr de cuvinte</p>
+              <p id="lengthHoverMeta" class="status-text"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="filter-canvas-header chronology-header">
+        <h3>Cronologia definițiilor</h3>
+        <p class="status-text">Anii sunt extrași automat din articolele din dicționar, pentru a vedea perioadele cele mai productive și zonele de vechime ale materialului.</p>
+      </div>
+      <div class="chronology-grid">
+        <article class="chart-card mini-chart-card">
+          <h3>Prima Atestare a Lemelor</h3>
+          <div id="chronologyFirstAttestations" class="scatterplot-shell">
+            <svg id="firstAttestationScatter" class="scatterplot-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="firstAttestationTooltip" class="scatter-tooltip" hidden></div>
+          </div>
+          <p class="status-text">Apasă pe grafic pentru zoom, explorare și export PNG.</p>
+        </article>
+        <article class="chart-card mini-chart-card">
+          <h3>Top Ani Productivi</h3>
+          <div class="chrono-viz">
+            <div id="chronologyYears" class="chrono-bars"></div>
+            <aside class="chrono-hover-card">
+              <h4 id="chronologyYearHoverTitle">An</h4>
+              <p id="chronologyYearHoverMeta" class="status-text"></p>
+              <div id="chronologyYearHoverTerms" class="chrono-term-list"></div>
+            </aside>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="table-header">
+        <h2>DLR C-CADUȚÉU</h2>
+        <div class="filter-canvas-header table-pos-header">
+          <h3>Tipuri de părți de vorbire</h3>
+          <p class="status-text">Alege categoria din canvasul de mai jos. Numărul de ocurențe apare în paranteze, iar la `substantiv` și `verb` poți deschide dropdownurile de tipuri.</p>
+        </div>
+        <div id="posFilters" class="pos-filters pos-canvas table-pos-canvas"></div>
+        <div class="search-row">
+          <input id="termSearch" class="search-input" type="search" placeholder="Caută cuvântul..." autocomplete="off" />
+        </div>
+        <p id="statusText" class="status-text">Încarc datele...</p>
+        <p id="fileMeta" class="file-meta"></p>
+        <p id="docxMeta" class="file-meta"></p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <div class="sort-header-inline">
+                  <span>Vezi în dicționar</span>
+                  <span class="sort-arrows">
+                    <button id="sortDictionaryAsc" class="sort-arrow" type="button" aria-label="Ordonează alfabetic crescător">↑</button>
+                    <button id="sortDictionaryDesc" class="sort-arrow" type="button" aria-label="Ordonează alfabetic descrescător">↓</button>
+                  </span>
+                </div>
+              </th>
+              <th>Informație gramaticală</th>
+              <th>
+                <div class="sort-header-inline">
+                  <span>Prima atestare</span>
+                  <span class="sort-arrows">
+                    <button id="sortFirstAttestationAsc" class="sort-arrow" type="button" aria-label="Ordonează de la cel mai vechi an la cel mai nou">↑</button>
+                    <button id="sortFirstAttestationDesc" class="sort-arrow" type="button" aria-label="Ordonează de la cel mai nou an la cel mai vechi">↓</button>
+                  </span>
+                </div>
+              </th>
+              <th>
+                <div class="type-header-inline">
+                  <span>Tip</span>
+                  <details class="type-filter-dropdown">
+                    <summary aria-label="Filtru tip"></summary>
+                    <div class="type-filter-inline">
+                      <button id="typeFilterAll" class="type-filter active" type="button">Toate</button>
+                      <button id="typeFilterLemma" class="type-filter" type="button">Leme</button>
+                      <button id="typeFilterVariant" class="type-filter" type="button">Variante</button>
+                    </div>
+                  </details>
+                </div>
+              </th>
+              <th>Trimitere la</th>
+            </tr>
+          </thead>
+          <tbody id="entriesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="articleModal" class="article-modal" hidden>
+    <div class="article-backdrop" data-close-modal="true"></div>
+    <section class="article-dialog" role="dialog" aria-modal="true" aria-labelledby="articleModalTitle">
+      <div class="article-dialog-header">
+        <div>
+          <p class="kicker">Vezi în dicționar</p>
+          <h2 id="articleModalTitle">Articol</h2>
+        </div>
+        <button id="closeArticleModal" class="secondary-button" type="button">Închide</button>
+      </div>
+      <div id="articleModalMeta" class="article-meta"></div>
+      <div id="articleModalBody" class="article-rich"></div>
+    </section>
+  </div>
+
+  <div id="scatterModal" class="article-modal" hidden>
+    <div class="article-backdrop" data-close-scatter-modal="true"></div>
+    <section class="article-dialog scatter-dialog" role="dialog" aria-modal="true" aria-labelledby="scatterModalTitle">
+      <div class="article-dialog-header">
+        <div>
+          <p class="kicker">Prima atestare a lemelor</p>
+          <h2 id="scatterModalTitle">Scatterplot</h2>
+        </div>
+        <div class="scatter-actions">
+          <button id="scatterExportButton" class="secondary-button" type="button">Export PNG</button>
+          <button id="scatterZoomInButton" class="secondary-button" type="button">Zoom +</button>
+          <button id="scatterZoomOutButton" class="secondary-button" type="button">Zoom -</button>
+          <button id="scatterResetButton" class="secondary-button" type="button">Reset</button>
+          <button id="closeScatterModal" class="secondary-button" type="button">Închide</button>
+        </div>
+      </div>
+      <div id="scatterModalStage" class="scatterplot-shell scatterplot-modal-shell">
+        <svg id="scatterModalSvg" class="scatterplot-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="scatterModalTooltip" class="scatter-tooltip" hidden></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/dictionary.js?v=43"></script>
+</body>
+</html>

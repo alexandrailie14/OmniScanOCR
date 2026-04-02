@@ -1,0 +1,46 @@
+# Secrets / env
+.env
+.env.*
+ocr-key.json
+*.pem
+*.key
+
+# App data (uploads, exports, users)
+data/
+backend/data/
+frontend/data/
+
+# Uploaded/processed files
+*.pdf
+*.txt
+*.json
+*.csv
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker
+*.tar
+
+# Local build artifacts
+build/
+dist/
+
+# Cloudflare tunnel env
+tunel.env

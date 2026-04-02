@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniScan</title>
+  <link rel="stylesheet" href="/static/styles.css?v=46" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>OmniScan</h1>
+      <button id="logout-btn" class="secondary hidden">Logout</button>
+    </header>
+
+    <section id="login-section" class="card">
+      <h2>Login</h2>
+      <form id="login-form">
+        <input type="text" name="username" placeholder="Username" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+      </form>
+      <div id="login-error" class="error"></div>
+    </section>
+
+    <section id="app-section" class="card hidden">
+      <div class="row">
+        <div class="upload-box">
+          <h2>Upload</h2>
+          <div class="inline">
+            <input type="file" id="file-input" multiple />
+            <button id="upload-btn">Upload</button>
+            <input type="file" id="bulk-txt-input" accept=".txt,.zip,text/plain,application/zip" multiple class="hidden" />
+            <button id="bulk-txt-btn">Importă mai multe txt.</button>
+          </div>
+        </div>
+        <div>
+          <h2>Files</h2>
+          <ul id="file-list"></ul>
+        </div>
+        <div class="exports-box">
+          <h2>Exporturi</h2>
+          <div class="inline wrap">
+            <button id="save-sel">Salvează selecția TXT</button>
+            <button id="save-progress">Salvează progres</button>
+            <button id="export-hidden">Export PDF (OCR ascuns)</button>
+            <button id="export-json">Export JSON</button>
+            <a class="button-link" href="/img-ocr/">Interfata IMG - OCR</a>
+            <a class="button-link" href="/studio">Interfata OCR</a>
+            <a class="button-link" href="/filters">Filtrează datele</a>
+            <a class="button-link" href="/dictionary">Interfața dicționar</a>
+          </div>
+          <a id="export-link" class="hidden" target="_blank">Deschide PDF exportat</a>
+          <a id="export-json-link" class="hidden" target="_blank">Deschide JSON exportat</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="viewer-section" class="card hidden">
+      <div class="split" id="split-main">
+        <div class="pane left">
+          <div class="pane-toolbar">
+            <button id="prev-page">←</button>
+            <span id="page-info">Page 1</span>
+            <button id="next-page">→</button>
+            <input id="goto-page" type="number" min="1" step="1" inputmode="numeric" pattern="[0-9]*" placeholder="Sari la" />
+            <button id="goto-btn">Sari</button>
+            <button id="zoom-out">-</button>
+            <button id="zoom-in">+</button>
+            <button id="reset-view">Reset view</button>
+            <button id="rot-left">Rot -1°</button>
+            <button id="rot-right">Rot +1°</button>
+            <button id="rot-reset">Rot 0°</button>
+            <button id="find-sel">Find în selecție</button>
+            <button id="scan-page">Scanează pagina</button>
+          </div>
+          <div class="viewer">
+            <canvas id="pdf-canvas"></canvas>
+            <div id="selection"></div>
+            <div id="scan-hits"></div>
+          </div>
+        </div>
+        <div class="splitter" id="splitter"></div>
+        <div class="pane right">
+          <div class="pane-toolbar">
+            <button id="upload-txt-btn">Upload TXT</button>
+            <input id="upload-txt-input" type="file" accept=".txt,text/plain" class="hidden" />
+            <button id="save-local-txt">Salvează TXT local</button>
+            <span>Zoom text:</span>
+            <button id="text-zoom-out">-</button>
+            <button id="text-zoom-in">+</button>
+            <button id="find-ocr">Caută în OCR</button>
+            <button id="norm-text">Norm</button>
+            <button id="clean-text">Curăță</button>
+            <div class="char-tools">
+              <label for="spell-lang">Spell:</label>
+              <select id="spell-lang">
+                <option value="auto">Auto</option>
+                <option value="ro">RO</option>
+                <option value="fr">FR</option>
+              </select>
+            </div>
+            <button id="spell-run">Spell</button>
+            <div class="char-tools">
+              <label for="fr-char-select">Diacritice FR:</label>
+              <select id="fr-char-select">
+                <option value="">Alege</option>
+              </select>
+            </div>
+            <div class="char-tools">
+              <label for="special-char-select">Caractere speciale:</label>
+              <select id="special-char-select">
+                <option value="">Alege</option>
+              </select>
+            </div>
+            <div class="tagger">
+              <label for="tag-select">Etichete:</label>
+              <select id="tag-select">
+                <option value="">Siglare selecție</option>
+              </select>
+            </div>
+          </div>
+          <div class="text-wrap">
+            <div id="ocr-highlight" class="ocr-highlight"></div>
+            <textarea id="ocr-output" placeholder="Text OCR..." spellcheck="false"></textarea>
+          </div>
+          <div id="spell-suggestions" class="spell-suggestions"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/app.js?v=46"></script>
+</body>
+</html>
