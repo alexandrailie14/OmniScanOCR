@@ -213,6 +213,10 @@ async function checkAuth() {
     const res = await fetch('/me');
     if (res.ok) {
       const me = await res.json();
+      if (me.home && me.home !== '/') {
+        window.location.href = me.home;
+        return;
+      }
       if (me.dictionary_only) {
         window.location.href = '/dictionary';
         return;
@@ -297,16 +301,105 @@ uploadBtn.addEventListener('click', async () => {
   if (!fileInput.files.length) return;
   const files = Array.from(fileInput.files);
   let ok = 0;
-  for (const f of files) {
-    const form = new FormData();
-    form.append('file', f);
-    const res = await fetch('/upload', { method: 'POST', body: form });
-    if (res.ok) ok += 1;
+  const failures = [];
+  uploadBtn.disabled = true;
+  const originalLabel = uploadBtn.textContent;
+  try {
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      uploadBtn.textContent = `Upload ${i + 1}/${files.length}`;
+      try {
+        await uploadPdfFile(file, i + 1, files.length);
+        ok += 1;
+      } catch (err) {
+        failures.push(`${file.name}: ${err.message || 'Upload eșuat.'}`);
+      }
+    }
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = originalLabel;
   }
   fileInput.value = '';
   await refreshFiles();
-  alert(`Upload finalizat: ${ok}/${files.length} fișiere.`);
+  if (!failures.length) {
+    alert(`Upload finalizat: ${ok}/${files.length} fișiere.`);
+    return;
+  }
+  alert(`Upload finalizat: ${ok}/${files.length} fișiere.\n\nDetalii:\n${failures.join('\n')}`);
 });
+
+function makeUploadId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+  return `upload-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+async function readUploadError(res) {
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if (res.status === 401) return 'Sesiunea a expirat. Reîncarcă pagina și loghează-te din nou.';
+  if (res.status === 403) return 'Nu ai permisiune pentru acest upload.';
+  if (res.status === 413) return 'Fișierul este prea mare pentru un upload direct. Încearcă din nou după refresh.';
+  if (contentType.includes('application/json')) {
+    try {
+      const data = await res.json();
+      if (data && data.detail) return String(data.detail);
+    } catch (err) {
+      // Ignore JSON parse errors and fall through to text.
+    }
+  }
+  const text = (await res.text()).trim();
+  if (!text) return `Upload eșuat (HTTP ${res.status}).`;
+  if (text.includes('cloudflare') || text.includes('Bad gateway') || text.includes('502')) {
+    return 'Uploadul a fost blocat pe traseul public. Fișierul este probabil prea mare pentru o singură cerere.';
+  }
+  return text.slice(0, 300);
+}
+
+async function uploadPdfFile(file, index, total) {
+  const CHUNK_SIZE = 8 * 1024 * 1024;
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+
+  if (totalChunks === 1) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/upload', { method: 'POST', body: form });
+    if (!res.ok) {
+      throw new Error(await readUploadError(res));
+    }
+    return;
+  }
+
+  const uploadId = makeUploadId();
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+    const start = chunkIndex * CHUNK_SIZE;
+    const end = Math.min(file.size, start + CHUNK_SIZE);
+    const chunkBlob = file.slice(start, end);
+    uploadBtn.textContent = `Upload ${index}/${total} • partea ${chunkIndex + 1}/${totalChunks}`;
+
+    const chunkForm = new FormData();
+    chunkForm.append('upload_id', uploadId);
+    chunkForm.append('filename', file.name);
+    chunkForm.append('chunk_index', String(chunkIndex));
+    chunkForm.append('total_chunks', String(totalChunks));
+    chunkForm.append('chunk', chunkBlob, file.name);
+
+    const chunkRes = await fetch('/upload/chunk', { method: 'POST', body: chunkForm });
+    if (!chunkRes.ok) {
+      throw new Error(await readUploadError(chunkRes));
+    }
+  }
+
+  const completeForm = new FormData();
+  completeForm.append('upload_id', uploadId);
+  completeForm.append('filename', file.name);
+  completeForm.append('total_chunks', String(totalChunks));
+
+  const completeRes = await fetch('/upload/complete', { method: 'POST', body: completeForm });
+  if (!completeRes.ok) {
+    throw new Error(await readUploadError(completeRes));
+  }
+}
 
 if (bulkTxtBtn && bulkTxtInput) {
   bulkTxtBtn.addEventListener('click', () => {

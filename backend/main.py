@@ -4,8 +4,11 @@ import json
 import zipfile
 import threading
 import importlib.util
+import shutil
+import statistics
 from pathlib import Path
 from typing import List
+from uuid import uuid4
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Response, Request
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
@@ -15,6 +18,10 @@ from itsdangerous import URLSafeSerializer, BadSignature
 from datetime import datetime
 
 from PIL import Image
+try:
+    from pillow_heif import register_heif_opener
+except Exception:  # pragma: no cover - optional at import time until installed
+    register_heif_opener = None
 import pytesseract
 import pypdfium2 as pdfium
 from google.cloud import vision
@@ -25,6 +32,7 @@ import cv2
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from PyPDF2 import PdfReader, PdfWriter
+from clemens_feature import build_clemens_payload
 from dictionary_feature import build_dictionary_payload
 
 APP_DIR = Path(__file__).resolve().parent
@@ -39,6 +47,8 @@ SOURCES_DIR = DATA_DIR / "sources"
 FILTER_DOCS_DIR = DATA_DIR / "filter_docs"
 ARTICLES_DIR = DATA_DIR / "articles"
 DICTIONARY_DIR = DATA_DIR / "dictionary"
+CLEMENS_DIR = DATA_DIR / "clemens"
+CHUNKS_DIR = DATA_DIR / "upload_chunks"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 PROGRESS_DIR.mkdir(parents=True, exist_ok=True)
@@ -49,6 +59,11 @@ SOURCES_DIR.mkdir(parents=True, exist_ok=True)
 FILTER_DOCS_DIR.mkdir(parents=True, exist_ok=True)
 ARTICLES_DIR.mkdir(parents=True, exist_ok=True)
 DICTIONARY_DIR.mkdir(parents=True, exist_ok=True)
+CLEMENS_DIR.mkdir(parents=True, exist_ok=True)
+CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
+
+PREVIEW_RENDER_SCALE = 2.4
+LOSSY_SPLIT_RENDER_SCALE = 4.5
 
 DICTIONARY_TXT_PATH = DICTIONARY_DIR / "lista_noua.txt"
 DICTIONARY_DOCX_PATH = DICTIONARY_DIR / "dlr_c_dictionary.docx"
@@ -80,15 +95,32 @@ else:
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-DICTIONARY_ONLY_USERS = {"isabelle"}
+if register_heif_opener is not None:
+    try:
+        register_heif_opener()
+    except Exception:
+        pass
+
+DICTIONARY_ONLY_USERS = {"isabelle", "calina"}
+CLEMENS_HOME_USERS = {"mariana"}
 DICTIONARY_ALLOWED_PATHS = (
     "/dictionary",
     "/api/dictionary-summary",
+    "/clemens",
+    "/api/clemens-summary",
     "/login",
     "/logout",
     "/me",
     "/static/",
 )
+
+
+def _home_for_user(user: str) -> str | None:
+    if user in CLEMENS_HOME_USERS:
+        return "/clemens"
+    if _is_dictionary_only_user(user):
+        return "/dictionary"
+    return None
 
 
 @app.exception_handler(HTTPException)
@@ -238,6 +270,89 @@ def _assert_user_can_access(user: str, filename: str) -> None:
         raise HTTPException(status_code=403, detail="Access denied")
 
 
+def _clear_preview_cache(filename: str) -> None:
+    prefix = f"{filename}_"
+    for preview_path in PREVIEW_DIR.glob(f"{prefix}*"):
+        if preview_path.is_dir():
+            shutil.rmtree(preview_path, ignore_errors=True)
+        else:
+            preview_path.unlink(missing_ok=True)
+
+
+ALLOWED_PDF_EXTENSIONS = {".pdf"}
+ALLOWED_IMAGE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".bmp",
+    ".tif",
+    ".tiff",
+}
+
+if register_heif_opener is not None:
+    ALLOWED_IMAGE_EXTENSIONS.update({".heic", ".heif", ".avif"})
+
+
+def _is_allowed_upload_name(name: str) -> bool:
+    return Path(name).suffix.lower() in (ALLOWED_PDF_EXTENSIONS | ALLOWED_IMAGE_EXTENSIONS)
+
+
+def _looks_like_pdf(name: str) -> bool:
+    return Path(name).suffix.lower() in ALLOWED_PDF_EXTENSIONS
+
+
+def _looks_like_image(name: str) -> bool:
+    return Path(name).suffix.lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def _sanitize_upload_stem(name: str) -> str:
+    stem = Path(name).stem.strip()
+    cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_", " ") else "_" for ch in stem).strip(" ._")
+    return cleaned or f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
+def _build_image_bundle_name(files: List[UploadFile]) -> str:
+    if len(files) == 1:
+        return f"{_sanitize_upload_stem(files[0].filename or 'document')}.pdf"
+    first_stem = _sanitize_upload_stem(files[0].filename or "document")
+    return f"{first_stem}_bundle.pdf"
+
+
+def _convert_images_to_pdf(files: List[UploadFile], out_path: Path) -> None:
+    pdf_images = []
+    try:
+        for file in files:
+            raw = file.file.read()
+            if not raw:
+                raise HTTPException(status_code=400, detail=f"Fișierul {file.filename or 'imagine'} este gol.")
+            try:
+                img = Image.open(io.BytesIO(raw))
+                img.load()
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Nu pot citi imaginea {file.filename}: {exc}") from exc
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            elif img.mode == "L":
+                img = img.convert("RGB")
+            pdf_images.append(img)
+        if not pdf_images:
+            raise HTTPException(status_code=400, detail="Nu există imagini valide pentru conversie.")
+        first, *rest = pdf_images
+        first.save(out_path, "PDF", resolution=300.0, save_all=True, append_images=rest)
+    finally:
+        for img in pdf_images:
+            try:
+                img.close()
+            except Exception:
+                pass
+
+
+def _cleanup_chunk_dir(chunk_dir: Path) -> None:
+    if chunk_dir.exists():
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+
+
 def _set_job_state(job_id: str, **kwargs):
     with _jobs_lock:
         state = _ocr_jobs.setdefault(job_id, {})
@@ -298,7 +413,7 @@ def _cleanup_editorial_text(text: str) -> str:
         src = _normalize_bracketed_date_text(line).strip().lower()
         if not src:
             return False
-        if src == "nedatat":
+        if src in {"nedatat", "nedatata"}:
             return True
         if not re.search(r"\d", src):
             return False
@@ -320,7 +435,7 @@ def _cleanup_editorial_text(text: str) -> str:
         if "B.C.U." in upper or "M. EMINESCU" in upper or "IASI" in upper:
             return True
         normalized_hasdeu = upper.replace(".", "").replace('"', "").replace("“", "").replace("”", "").replace("„", "")
-        if normalized_hasdeu in {"B P HASDEU", "BP HASDEU"}:
+        if normalized_hasdeu in {"B P HASDEU", "BP HASDEU"} and '"' not in compact and '„' not in compact and '”' not in compact:
             return True
         return False
 
@@ -354,7 +469,8 @@ def _cleanup_editorial_text(text: str) -> str:
             break
 
         kept = []
-        for ln in lines[idx:]:
+        tail_lines = lines[idx:]
+        for ln in tail_lines:
             if ln is None:
                 continue
             stripped = ln.strip()
@@ -363,9 +479,11 @@ def _cleanup_editorial_text(text: str) -> str:
                 continue
             normalized = normalize_match_line(stripped)
             normalized_hasdeu = normalized.replace(".", "").replace('"', "").replace("“", "").replace("”", "").replace("„", "")
-            if normalized_hasdeu in {"B P HASDEU", "BP HASDEU"}:
+            normalized_hasdeu = re.sub(r"\s+", " ", normalized_hasdeu).strip()
+            has_quotes = any(q in stripped for q in ['"', '„', '”'])
+            if normalized_hasdeu in {"B P HASDEU", "BP HASDEU", "AB P HASDEU", "ATBOB P HASDEU", "ARA B P HASDEU"} and not has_quotes:
                 continue
-            if "ARHIVA SPIRITIST" in normalized:
+            if normalized in {"ARHIVA SPIRITISTA", "ARHIVA SPIRITISTA - VOL. IV", "ARHIVA SPIRITISTA - VOL IV"}:
                 continue
             kept.append(stripped)
         page_text = "\n".join(kept).strip()
@@ -375,6 +493,7 @@ def _cleanup_editorial_text(text: str) -> str:
     # Step 2: after page-level cleanup, drop the synthetic page separators.
     cleaned = "\n\n".join(cleaned_pages)
     cleaned = re.sub(r"(?m)^--- PAGINA \d+ ---(?:\s+\d{1,3})?\s*$", "", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
@@ -388,8 +507,11 @@ def _slug_date(text: str) -> str:
 
 
 def _normalize_bracketed_date_text(text: str) -> str:
+    import re
     src = str(text or "")
-    return src.replace("[", "").replace("]", "")
+    src = src.replace("[", "").replace("]", "")
+    src = re.sub(r"\s+", " ", src)
+    return src.strip()
 
 
 def _filename_article_number(text: str) -> str:
@@ -400,22 +522,46 @@ def _filename_article_number(text: str) -> str:
 
 def _volume_suffix(file_name: str, text: str) -> str:
     import re
-    file_probe = str(file_name or "")
-    m = re.search(r"VOL(?:UMUL)?[.\s_-]*([IVXLC0-9]+)", file_probe, re.IGNORECASE)
-    if not m:
+
+    def normalize_token(token: str) -> str:
+        roman_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6}
+        upper = str(token or "").upper()
+        return str(roman_map.get(upper, upper))
+
+    file_probe = Path(str(file_name or "")).stem
+    file_probe = re.sub(r"(?i)_split_master$", "", file_probe)
+    file_probe = re.sub(r"(?i)_split_p\d+(?:-\d+)?_shift-?\d+$", "", file_probe)
+    file_probe = file_probe.replace("-", "_")
+
+    patterns = [
+        r"VOL(?:UMUL)?[.\s_-]*([IVXLC0-9]+)",
+        r"ARHIVA[_\s-]*SPIRITISTA[_\s-]*([IVXLC0-9]+)",
+        r"SPIRITISTA[_\s-]*([IVXLC0-9]+)$",
+        r"[_\s-]([IVXLC0-9]+)$",
+    ]
+
+    token = None
+    for pattern in patterns:
+        match = re.search(pattern, file_probe, re.IGNORECASE)
+        if match:
+            token = match.group(1)
+            break
+
+    if token is None:
         text_probe = str(text or "")
-        m = re.search(r"VOL(?:UMUL)?[.\s_-]*([IVXLC0-9]+)", text_probe, re.IGNORECASE)
-    if not m:
+        match = re.search(r"VOL(?:UMUL)?[.\s_-]*([IVXLC0-9]+)", text_probe, re.IGNORECASE)
+        if match:
+            token = match.group(1)
+
+    if token is None:
         return "FR_VOL"
-    token = m.group(1).upper()
-    roman_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6}
-    num = roman_map.get(token, token)
+
+    num = normalize_token(token)
     return f"FR_VOL{num}"
 
-
-def _split_articles(text: str):
+def _split_articles(text: str, apply_cleanup: bool = True):
     import re
-    src = _cleanup_editorial_text(text)
+    src = _cleanup_editorial_text(text) if apply_cleanup else str(text or "").replace("\r\n", "\n").replace("\r", "\n")
     if not src:
         return []
 
@@ -423,12 +569,12 @@ def _split_articles(text: str):
     starts = []
 
     def is_article_number(line: str) -> bool:
-        return bool(re.fullmatch(r"\d{3,4}\*?", re.sub(r"\s+", " ", line).strip()))
+        return bool(re.fullmatch(r"\d{2,4}\*?", re.sub(r"\s+", " ", line).strip()))
 
     def is_date_line(line: str) -> bool:
         normalized_probe_date = _normalize_bracketed_date_text(line)
         low = normalized_probe_date.lower()
-        return low == "nedatat" or (bool(re.search(r"\d", normalized_probe_date)) and any(
+        return low in {"nedatat", "nedatata"} or (bool(re.search(r"\d", normalized_probe_date)) and any(
             month in low for month in [
                 "ianuarie", "februarie", "martie", "aprilie", "mai", "iunie",
                 "iulie", "august", "septembrie", "octombrie", "noiembrie", "decembrie",
@@ -461,7 +607,7 @@ def _split_articles(text: str):
         i += 1
 
     articles = []
-    end_re = re.compile(r"\(Arhivele\s+Na[țt]ionale\.[\s\S]*?\)", re.IGNORECASE)
+    end_re = re.compile(r"\((?:Arhivele\s+Na[țt]ionale|Arh\.)[\s\S]*?\)", re.IGNORECASE)
     for idx, start_idx in enumerate(starts):
         end_idx = starts[idx + 1] if idx + 1 < len(starts) else len(lines)
         article_lines = lines[start_idx:end_idx]
@@ -482,6 +628,8 @@ def _split_articles(text: str):
             end_match = candidate
         if end_match:
             chunk = chunk[:end_match.end()].strip()
+        if not end_re.search(chunk):
+            continue
         articles.append({
             "number": article_no,
             "date": article_date,
@@ -965,12 +1113,16 @@ def _ocr_google_with_boxes(pil_img: Image.Image):
         raise RuntimeError(response.error.message)
     annotation = response.full_text_annotation
     if not annotation or not annotation.pages:
-        return "", []
+        return "", [], []
     full_text = annotation.text.strip() if annotation.text else ""
     boxes = []
+    paragraphs = []
     for page in annotation.pages:
         for block in page.blocks:
             for para in block.paragraphs:
+                para_words = []
+                para_xs = []
+                para_ys = []
                 for word in para.words:
                     word_text = "".join([sym.text for sym in word.symbols])
                     verts = word.bounding_box.vertices
@@ -979,7 +1131,136 @@ def _ocr_google_with_boxes(pil_img: Image.Image):
                     x1, x2 = min(xs), max(xs)
                     y1, y2 = min(ys), max(ys)
                     boxes.append((word_text, x1, y1, x2 - x1, y2 - y1))
-    return full_text, boxes
+                    if word_text.strip():
+                        para_words.append(word_text.strip())
+                        para_xs.extend(xs)
+                        para_ys.extend(ys)
+                if para_words and para_xs and para_ys:
+                    px1, px2 = min(para_xs), max(para_xs)
+                    py1, py2 = min(para_ys), max(para_ys)
+                    paragraphs.append({
+                        "text": " ".join(para_words).strip(),
+                        "x": float(px1),
+                        "y": float(py1),
+                        "w": float(px2 - px1),
+                        "h": float(py2 - py1),
+                    })
+    return full_text, boxes, paragraphs
+
+
+def _paragraphs_to_layout_text(paragraphs):
+    import re
+
+    if not paragraphs:
+        return ""
+
+    items = [
+        {
+            "text": str(item.get("text") or "").strip(),
+            "x": float(item.get("x") or 0),
+            "y": float(item.get("y") or 0),
+            "w": float(item.get("w") or 0),
+            "h": float(item.get("h") or 0),
+        }
+        for item in paragraphs
+        if str(item.get("text") or "").strip()
+    ]
+    if not items:
+        return ""
+
+    heights = [max(1.0, item["h"]) for item in items]
+    median_h = statistics.median(heights) if heights else 18.0
+    items.sort(key=lambda item: (item["y"], item["x"]))
+
+    out = []
+    prev_bottom = None
+    for item in items:
+        if prev_bottom is not None and (item["y"] - prev_bottom) > max(16.0, median_h * 0.75):
+            out.append("")
+        out.append(item["text"])
+        prev_bottom = item["y"] + item["h"]
+
+    text = "\n".join(out).strip()
+    text = re.sub(r"\s+([,.;:!?%)\]\}])", r"\1", text)
+    text = re.sub(r"([(\[„«])\s+", r"\1", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
+    return text.strip()
+
+
+def _boxes_to_layout_text(boxes):
+    import re
+
+    if not boxes:
+        return ""
+
+    items = []
+    for word, x, y, w, h in boxes:
+        token = str(word or "").strip()
+        if not token:
+            continue
+        items.append({
+            "text": token,
+            "x": float(x),
+            "y": float(y),
+            "w": float(w),
+            "h": float(h),
+            "cy": float(y) + (float(h) / 2.0),
+        })
+
+    if not items:
+        return ""
+
+    items.sort(key=lambda item: (item["cy"], item["x"]))
+    heights = [max(1.0, item["h"]) for item in items]
+    median_h = statistics.median(heights) if heights else 12.0
+    line_threshold = max(8.0, median_h * 0.65)
+
+    lines = []
+    for item in items:
+        if not lines:
+            lines.append({"items": [item], "cy": item["cy"], "top": item["y"], "bottom": item["y"] + item["h"]})
+            continue
+        current = lines[-1]
+        if abs(item["cy"] - current["cy"]) <= line_threshold:
+            current["items"].append(item)
+            current["cy"] = sum(v["cy"] for v in current["items"]) / len(current["items"])
+            current["top"] = min(current["top"], item["y"])
+            current["bottom"] = max(current["bottom"], item["y"] + item["h"])
+        else:
+            lines.append({"items": [item], "cy": item["cy"], "top": item["y"], "bottom": item["y"] + item["h"]})
+
+    def join_line_words(words):
+        words = sorted(words, key=lambda item: item["x"])
+        tokens = []
+        for word in words:
+            token = word["text"]
+            if not tokens:
+                tokens.append(token)
+                continue
+            if re.fullmatch(r"[.,;:!?%)\]\}]+", token):
+                tokens[-1] = f"{tokens[-1]}{token}"
+            else:
+                tokens.append(token)
+        return " ".join(tokens).strip()
+
+    rendered_lines = []
+    prev_bottom = None
+    for line in sorted(lines, key=lambda item: item["top"]):
+        text = join_line_words(line["items"])
+        if not text:
+            continue
+        if prev_bottom is not None and (line["top"] - prev_bottom) > max(14.0, median_h * 1.35):
+            rendered_lines.append("")
+        rendered_lines.append(text)
+        prev_bottom = line["bottom"]
+
+    text = "\n".join(rendered_lines).strip()
+    text = re.sub(r"\s+([,.;:!?%)\]\}])", r"\1", text)
+    text = re.sub(r"([(\[„«])\s+", r"\1", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
+    return text.strip()
 
 
 def _append_export_pages(user: str, pages: List[Image.Image], visible: bool = False) -> str:
@@ -992,7 +1273,7 @@ def _append_export_pages(user: str, pages: List[Image.Image], visible: bool = Fa
 
     for page_img in pages:
         clean = _camscanner_bw(page_img)
-        text, boxes = _ocr_google_with_boxes(page_img)
+        text, boxes, _paragraphs = _ocr_google_with_boxes(page_img)
         if not text:
             continue
 
@@ -1180,7 +1461,8 @@ def _process_pdf_page(file: str, page: int, rotation: float, mode: str):
 
     texts = []
     for p in pages:
-        t, _ = _ocr_google_with_boxes(p)
+        raw_text, boxes, paragraphs = _ocr_google_with_boxes(p)
+        t = _paragraphs_to_layout_text(paragraphs) or _boxes_to_layout_text(boxes) or raw_text
         if t:
             texts.append(t.strip())
     return "\n\n".join(texts), pages
@@ -1246,8 +1528,9 @@ def index(request: Request):
     if token:
         try:
             data = serializer.loads(token)
-            if _is_dictionary_only_user(data.get("u")):
-                return RedirectResponse(url="/dictionary", status_code=303)
+            home = _home_for_user(data.get("u"))
+            if home:
+                return RedirectResponse(url=home, status_code=303)
         except BadSignature:
             pass
     return FileResponse(FRONTEND_DIR / "index.html")
@@ -1293,6 +1576,36 @@ def dictionary_summary(user: str = Depends(get_current_user)):
     return build_dictionary_payload(DICTIONARY_TXT_PATH, DICTIONARY_DOCX_PATH)
 
 
+@app.get("/clemens", response_class=HTMLResponse)
+def clemens_page(request: Request):
+    try:
+        _ = get_current_user(request)
+    except HTTPException:
+        return RedirectResponse(url="/", status_code=303)
+    return FileResponse(
+        FRONTEND_DIR / "clemens.html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@app.get("/api/clemens-summary")
+def clemens_summary(user: str = Depends(get_current_user)):
+    _ = user
+    required = [
+        CLEMENS_DIR / "RO-DE.xlsx",
+        CLEMENS_DIR / "GE-RO_Clemens_mapping.csv",
+        CLEMENS_DIR / "Clemens_RO-GE_CLRE.docx",
+        CLEMENS_DIR / "Clemens_GE-RO_CLRE.docx",
+    ]
+    if not all(path.exists() for path in required):
+        raise HTTPException(status_code=404, detail="Fișierele Clemens nu sunt disponibile pe server.")
+    return build_clemens_payload(CLEMENS_DIR)
+
+
 @app.post("/login")
 def login(response: Response, username: str = Form(...), password: str = Form(...)):
     users = _load_users()
@@ -1309,7 +1622,7 @@ def login(response: Response, username: str = Form(...), password: str = Form(..
             raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_session(username)
     response.set_cookie("session", token, httponly=True, samesite="lax")
-    redirect_to = "/dictionary" if _is_dictionary_only_user(username) else None
+    redirect_to = _home_for_user(username)
     return {"ok": True, "redirect_to": redirect_to}
 
 
@@ -1325,7 +1638,7 @@ def me(user: str = Depends(get_current_user)):
         "user": user,
         "is_admin": user == ADMIN_USER,
         "dictionary_only": _is_dictionary_only_user(user),
-        "home": "/dictionary" if _is_dictionary_only_user(user) else "/",
+        "home": _home_for_user(user) or "/",
     }
 
 
@@ -1350,21 +1663,145 @@ def admin_create_user(
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), user: str = Depends(get_current_user)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file")
-    safe_name = Path(file.filename).name
+async def upload(files: List[UploadFile] = File(...), user: str = Depends(get_current_user)):
+    valid_files = [f for f in files if f and (f.filename or "").strip()]
+    if not valid_files:
+        raise HTTPException(status_code=400, detail="Nu ai selectat niciun fișier.")
+
+    invalid = [Path(f.filename).name for f in valid_files if not _is_allowed_upload_name(f.filename or "")]
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Sunt acceptate doar PDF, PNG, JPG, JPEG, WEBP, BMP, TIFF, HEIC, HEIF și AVIF. "
+                f"Fișiere invalide: {', '.join(invalid)}"
+            ),
+        )
+
+    pdf_files = [f for f in valid_files if _looks_like_pdf(f.filename or "")]
+    image_files = [f for f in valid_files if _looks_like_image(f.filename or "")]
+    if pdf_files and image_files:
+        raise HTTPException(
+            status_code=400,
+            detail="Într-un singur upload poți trimite fie un PDF, fie una sau mai multe imagini, nu amestecat.",
+        )
+    if len(pdf_files) > 1:
+        raise HTTPException(status_code=400, detail="Poți încărca un singur PDF odată.")
+
+    if pdf_files:
+        file = pdf_files[0]
+        safe_name = Path(file.filename).name
+        dest = UPLOAD_DIR / safe_name
+        with dest.open("wb") as f:
+            f.write(await file.read())
+        _grant_file(user, safe_name)
+        _clear_preview_cache(safe_name)
+        return {"ok": True, "filename": safe_name, "source_type": "pdf", "page_count": 1}
+
+    safe_name = _build_image_bundle_name(image_files)
     dest = UPLOAD_DIR / safe_name
-    with dest.open("wb") as f:
-        f.write(await file.read())
+    _convert_images_to_pdf(image_files, dest)
     _grant_file(user, safe_name)
-    # Invalidate old preview cache entries for same filename
-    prefix = f"{safe_name}_"
-    for p in PREVIEW_DIR.glob(f"{prefix}*"):
-        if p.is_dir():
-            for child in p.glob("*"):
-                child.unlink(missing_ok=True)
-            p.rmdir()
+    _clear_preview_cache(safe_name)
+    return {
+        "ok": True,
+        "filename": safe_name,
+        "source_type": "images",
+        "page_count": len(image_files),
+    }
+
+
+@app.post("/upload/chunk")
+async def upload_chunk(
+    upload_id: str = Form(...),
+    filename: str = Form(...),
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    chunk: UploadFile = File(...),
+    user: str = Depends(get_current_user),
+):
+    if not filename:
+        raise HTTPException(status_code=400, detail="No file name")
+    if chunk_index < 0 or total_chunks <= 0 or chunk_index >= total_chunks:
+        raise HTTPException(status_code=400, detail="Invalid chunk metadata")
+
+    safe_name = Path(filename).name
+    safe_upload_id = "".join(ch for ch in upload_id if ch.isalnum() or ch in ("-", "_")) or uuid4().hex
+    chunk_dir = CHUNKS_DIR / f"{user}_{safe_upload_id}"
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+
+    meta_path = chunk_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+    else:
+        meta = {}
+
+    expected_name = meta.get("filename")
+    expected_chunks = meta.get("total_chunks")
+    if expected_name and expected_name != safe_name:
+        raise HTTPException(status_code=400, detail="Filename mismatch between chunks")
+    if expected_chunks and int(expected_chunks) != total_chunks:
+        raise HTTPException(status_code=400, detail="Chunk count mismatch between requests")
+
+    meta = {"filename": safe_name, "total_chunks": total_chunks}
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+    chunk_path = chunk_dir / f"{chunk_index:06d}.part"
+    with chunk_path.open("wb") as fh:
+        fh.write(await chunk.read())
+
+    return {"ok": True, "chunk_index": chunk_index, "total_chunks": total_chunks}
+
+
+@app.post("/upload/complete")
+async def upload_complete(
+    upload_id: str = Form(...),
+    filename: str = Form(...),
+    total_chunks: int = Form(...),
+    user: str = Depends(get_current_user),
+):
+    if not filename:
+        raise HTTPException(status_code=400, detail="No file name")
+    safe_name = Path(filename).name
+    safe_upload_id = "".join(ch for ch in upload_id if ch.isalnum() or ch in ("-", "_"))
+    if not safe_upload_id:
+        raise HTTPException(status_code=400, detail="Invalid upload id")
+
+    chunk_dir = CHUNKS_DIR / f"{user}_{safe_upload_id}"
+    if not chunk_dir.exists():
+        raise HTTPException(status_code=400, detail="Upload chunk session not found")
+
+    meta_path = chunk_dir / "meta.json"
+    if not meta_path.exists():
+        raise HTTPException(status_code=400, detail="Upload metadata missing")
+
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Upload metadata corrupted")
+
+    if meta.get("filename") != safe_name:
+        raise HTTPException(status_code=400, detail="Filename mismatch")
+    if int(meta.get("total_chunks", 0)) != total_chunks:
+        raise HTTPException(status_code=400, detail="Chunk count mismatch")
+
+    temp_dest = chunk_dir / f"{safe_name}.assembling"
+    with temp_dest.open("wb") as out:
+        for idx in range(total_chunks):
+            part_path = chunk_dir / f"{idx:06d}.part"
+            if not part_path.exists():
+                raise HTTPException(status_code=400, detail=f"Missing chunk {idx + 1} of {total_chunks}")
+            with part_path.open("rb") as part_file:
+                shutil.copyfileobj(part_file, out)
+
+    final_dest = UPLOAD_DIR / safe_name
+    temp_dest.replace(final_dest)
+    _grant_file(user, safe_name)
+    _clear_preview_cache(safe_name)
+    _cleanup_chunk_dir(chunk_dir)
     return {"ok": True, "filename": safe_name}
 
 
@@ -1394,7 +1831,7 @@ def latest_split_file(user: str = Depends(get_current_user)):
         name = path.name.lower()
         if path.suffix.lower() != ".pdf":
             continue
-        if "_split_" in name or name.startswith("split_") or "split_pages" in name:
+        if name.endswith("_split_master.pdf"):
             candidates.append(path)
     if not candidates:
         raise HTTPException(status_code=404, detail="Nu există PDF splitat disponibil.")
@@ -1464,7 +1901,7 @@ def pdf_page_box(name: str, page: int, user: str = Depends(get_current_user)):
 
 
 @app.get("/pdf/page_image/{name}/{page}")
-def pdf_page_image(name: str, page: int, scale: float = 1.6, rotation: float = 0, user: str = Depends(get_current_user)):
+def pdf_page_image(name: str, page: int, scale: float = PREVIEW_RENDER_SCALE, rotation: float = 0, user: str = Depends(get_current_user)):
     safe_name = Path(name).name
     _assert_user_can_access(user, safe_name)
     cache_key = _preview_file_key(safe_name)
@@ -1472,15 +1909,15 @@ def pdf_page_image(name: str, page: int, scale: float = 1.6, rotation: float = 0
     rot_key = int(float(rotation or 0) * 10)
     page_dir = PREVIEW_DIR / cache_key
     page_dir.mkdir(parents=True, exist_ok=True)
-    out_path = page_dir / f"p{page}_s{scale_key}_r{rot_key}.jpg"
+    out_path = page_dir / f"p{page}_s{scale_key}_r{rot_key}.png"
     if not out_path.exists():
         pil = _render_pdf_page(safe_name, page, scale=scale)
         rot = float(rotation or 0) % 360
         if rot:
             pil = pil.rotate(-rot, expand=True)
         pil = pil.convert("RGB")
-        pil.save(out_path, format="JPEG", quality=88, optimize=True)
-    return FileResponse(out_path, media_type="image/jpeg")
+        pil.save(out_path, format="PNG", optimize=True)
+    return FileResponse(out_path, media_type="image/png")
 
 
 @app.post("/pdf/split")
@@ -1504,7 +1941,7 @@ async def split_pdf(
     start_page, end_page = _normalize_page_range(start_page, end_page or total_pages, total_pages)
 
     shift_value = float(shift or 0)
-    render_scale = 2.5
+    render_scale = LOSSY_SPLIT_RENDER_SCALE
     buf = io.BytesIO()
     pdf_canvas = None
     appended_pages = 0
@@ -1688,7 +2125,7 @@ async def pdf_clean_page(
     if page < 1 or page > total_pages:
         raise HTTPException(status_code=400, detail=f"Pagina trebuie să fie între 1 și {total_pages}.")
 
-    pil = _render_pdf_page(safe_name, page, scale=2.5).convert("RGB")
+    pil = _render_pdf_page(safe_name, page, scale=LOSSY_SPLIT_RENDER_SCALE).convert("RGB")
     cropped_candidates = _crop_pages_by_ocr_boxes(pil)
     cleaned = _largest_image(cropped_candidates)
     if cleaned is None:
@@ -1759,16 +2196,24 @@ async def ocr_google_page(
     file: str = Form(...),
     page: int = Form(...),
     rotation: float = Form(0),
+    mode: str = Form("document"),
     auto_export: bool = Form(True),
     user: str = Depends(get_current_user),
 ):
     _assert_user_can_access(user, Path(file).name)
-    text, pages = _process_pdf_page(file, page, rotation, mode="document")
-    _save_ocr_cache(user, file, page, rotation, "document", text.strip())
+    raw_mode = (mode or "document").strip().lower()
+    if raw_mode == "scan":
+        normalized_mode = "scan"
+    elif raw_mode == "kraken":
+        normalized_mode = "kraken"
+    else:
+        normalized_mode = "document"
+    text, pages = _process_pdf_page(file, page, rotation, mode=normalized_mode)
+    _save_ocr_cache(user, file, page, rotation, normalized_mode, text.strip())
     export_path = None
     if auto_export:
         export_path = _append_export_pages(user, pages, visible=False)
-    return {"text": text, "path": export_path}
+    return {"text": text, "path": export_path, "mode": normalized_mode}
 
 
 @app.post("/scan/page")
@@ -2340,16 +2785,17 @@ async def export_articles(
     payload = await request.json()
     file_name = Path(str(payload.get("file") or "document")).name
     raw_text = str(payload.get("text") or "")
-    apply_cleanup = bool(payload.get("cleanup", True))
-    normalized_text = _cleanup_editorial_text(raw_text) if apply_cleanup else raw_text
-    articles = _split_articles(normalized_text)
+    apply_cleanup = bool(payload.get("cleanup", False))
+    articles = _split_articles(raw_text, apply_cleanup=apply_cleanup)
     if not articles:
         raise HTTPException(status_code=400, detail="Nu am putut detecta articolele în text.")
 
     doc_id = _safe_doc_id(file_name)
     user_dir = ARTICLES_DIR / user / doc_id
     user_dir.mkdir(parents=True, exist_ok=True)
-    volume_suffix = _volume_suffix(file_name, normalized_text)
+    for old_txt in user_dir.glob("*.txt"):
+        old_txt.unlink(missing_ok=True)
+    volume_suffix = _volume_suffix(file_name, raw_text)
 
     saved = []
     for idx, article in enumerate(articles, start=1):

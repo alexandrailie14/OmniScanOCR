@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 import zipfile
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -14,6 +14,23 @@ LINE_YEAR_PATTERN = re.compile(
     r"^\s*(?:<|ante\s+|post\s+|c\.\s*|cca\.?\s*|circa\s+)?(?P<start>\d{4})(?:\s*[–-]\s*(?P<end>\d{4}))?",
     flags=re.IGNORECASE,
 )
+PHRASEOLOGY_LINE_PATTERN = re.compile(
+    r"^\s*[✧⋆*]?\s*(?P<kind>E\s*x\s*p\s*r|P\s*r\s*o\s*v|L\s*o\s*c)\s*\.\s*(?P<body>.+?)\s*$",
+    flags=re.IGNORECASE,
+)
+REGISTER_MARKERS = [
+    ("Arg.", re.compile(r"(?<!\w)arg\.(?!\w)", flags=re.IGNORECASE)),
+    ("Fam.", re.compile(r"(?<!\w)fam\.(?!\w)", flags=re.IGNORECASE)),
+    ("Pop.", re.compile(r"(?<!\w)pop\.(?!\w)", flags=re.IGNORECASE)),
+    ("Reg.", re.compile(r"(?<!\w)reg\.(?!\w)", flags=re.IGNORECASE)),
+    ("Fig.", re.compile(r"(?<!\w)fig\.(?!\w)", flags=re.IGNORECASE)),
+    ("Înv.", re.compile(r"(?<!\w)[iî]nv\.(?!\w)", flags=re.IGNORECASE)),
+    ("Rar.", re.compile(r"(?<!\w)rar\.(?!\w)", flags=re.IGNORECASE)),
+]
+REGISTER_PREFIX_PATTERN = re.compile(
+    r"^\s*(?P<prefix>(?:(?:arg|fam|pop|reg|fig|[iî]nv|rar)\.\s*,?\s*)+)(?P<rest>.+?)\s*$",
+    flags=re.IGNORECASE,
+)
 FIRST_ATTESTATION_OVERRIDES = {
     "CACERDISÍ": 1907,
     "CA1": 1551,
@@ -22,6 +39,19 @@ FIRST_ATTESTATION_OVERRIDES = {
     "CADORISÍ": 1924,
     "CADÚC2, -Ă": 1683,
     "CADÚCUM": 1898,
+}
+TARGET_ENTRY_OVERRIDES = {
+    "cacior1": "CÁCIOR1, -Ă",
+    "cacior2": "CÁCIOR2, -Ă",
+    "cabalist": "CABALÍST, -Ă",
+    "cabazlicos": "CABAZLICÓS, -OÁSĂ",
+    "cabazlacar": "CABAZLÂCÁR, -Ă",
+    "cacochim": "CACOCHÍM, -Ă",
+    "cadavros": "CADAVRÓS, -OÁSĂ",
+    "cadaveros": "CADAVERÓS, -OÁSĂ",
+    "cadanesc": "CADÂNÉSC, -EÁSCĂ",
+    "cadrilat": "CADRILÁT, -Ă",
+    "caducar": "CADUCÁR, -Ă",
 }
 
 
@@ -78,6 +108,54 @@ def _normalize_dictionary_key_exact(term: str) -> str:
     decomposed = unicodedata.normalize("NFD", stripped)
     without_diacritics = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
     return without_diacritics.replace(",", "").replace(" ", "")
+
+
+def _registers_from_text(text: str) -> list[str]:
+    return [label for label, pattern in REGISTER_MARKERS if pattern.search(text or "")]
+
+
+def _split_phraseology_body(body: str) -> list[dict]:
+    parts = [part.strip() for part in body.split("|")]
+    if not parts:
+        return []
+
+    groups: list[dict] = []
+    current_registers = []
+    current_prefix = ""
+    current_parts: list[str] = []
+
+    def flush() -> None:
+        if not current_parts:
+            return
+        text = " | ".join(part.strip() for part in current_parts if part.strip()).strip()
+        if text:
+            if current_prefix:
+                text = f"{current_prefix} {text}".strip()
+            groups.append({
+                "text": text,
+                "registre": list(current_registers),
+            })
+        current_parts.clear()
+
+    for raw_part in parts:
+        if not raw_part:
+            continue
+        prefix_match = REGISTER_PREFIX_PATTERN.match(raw_part)
+        if prefix_match:
+            detected_registers = _registers_from_text(prefix_match.group("prefix"))
+            prefix_text = prefix_match.group("prefix").strip()
+            remainder = prefix_match.group("rest").strip()
+            if current_parts:
+                flush()
+            current_registers = detected_registers
+            current_prefix = prefix_text
+            if remainder:
+                current_parts.append(remainder)
+            continue
+        current_parts.append(raw_part)
+
+    flush()
+    return groups or [{"text": body.strip(), "registre": []}]
 
 
 def _extract_dictionary_entry(line: str):
@@ -412,24 +490,34 @@ def _read_dictionary_entries(txt_path: Path):
 
     lemma_index = {}
     lemma_index_exact = {}
+    all_index = {}
+    all_index_exact = {}
     for entry in entries:
-        if entry["tip"] != "lemă":
-            continue
-        lemma_index.setdefault(_normalize_dictionary_key(entry["termen"]), []).append(entry["termen"])
-        lemma_index_exact.setdefault(_normalize_dictionary_key_exact(entry["termen"]), []).append(entry["termen"])
+        all_index.setdefault(_normalize_dictionary_key(entry["termen"]), []).append(entry["termen"])
+        all_index_exact.setdefault(_normalize_dictionary_key_exact(entry["termen"]), []).append(entry["termen"])
+        if entry["tip"] == "lemă":
+            lemma_index.setdefault(_normalize_dictionary_key(entry["termen"]), []).append(entry["termen"])
+            lemma_index_exact.setdefault(_normalize_dictionary_key_exact(entry["termen"]), []).append(entry["termen"])
 
     for entry in entries:
         target = entry["trimitere_la"]
         if not target:
             entry["lema_tinta"] = None
             entry["leme_posibile"] = []
+            entry["trimitere_tinta_exacta"] = None
             continue
 
-        target_matches = lemma_index_exact.get(_normalize_dictionary_key_exact(target), [])
+        override_target = TARGET_ENTRY_OVERRIDES.get(_normalize_dictionary_key_exact(target))
+        target_matches = [override_target] if override_target and override_target in lemma_index_exact.get(_normalize_dictionary_key_exact(override_target), []) + lemma_index.get(_normalize_dictionary_key(override_target), []) else lemma_index_exact.get(_normalize_dictionary_key_exact(target), [])
         if not target_matches:
             target_matches = lemma_index.get(_normalize_dictionary_key(target), [])
         entry["lema_tinta"] = target_matches[0] if len(target_matches) == 1 else None
         entry["leme_posibile"] = target_matches
+
+        exact_target_matches = [override_target] if override_target else all_index_exact.get(_normalize_dictionary_key_exact(target), [])
+        if not exact_target_matches:
+            exact_target_matches = all_index.get(_normalize_dictionary_key(target), [])
+        entry["trimitere_tinta_exacta"] = exact_target_matches[0] if len(exact_target_matches) == 1 else None
 
     return entries
 
@@ -481,7 +569,6 @@ def _read_docx_articles(docx_path: Path):
 
     for article in articles:
         article.pop("articol_linii", None)
-        article.pop("articol_html_linii", None)
         article["pagini"] = max(1, int(article.pop("page_breaks", 0)) + 1)
 
     surface_index = {}
@@ -534,6 +621,62 @@ def _article_body_text(article_text: str, header_text: str) -> str:
     if lines and lines[0].strip() == (header_text or "").strip():
         return "\n".join(lines[1:]).strip()
     return article_text.strip()
+
+
+def _article_body_line_pairs(article_text: str, header_text: str, article_html_lines: list[str] | None) -> list[tuple[str, str]]:
+    text_lines = article_text.splitlines() if article_text else []
+    html_lines = list(article_html_lines or [])
+    if text_lines and text_lines[0].strip() == (header_text or "").strip():
+        text_lines = text_lines[1:]
+        if html_lines:
+            html_lines = html_lines[1:]
+    return list(zip(text_lines, html_lines))
+
+
+def _html_to_plain_text(html: str) -> str:
+    if not html:
+        return ""
+    plain = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    plain = re.sub(r"<[^>]+>", "", plain)
+    plain = unescape(plain)
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+def _normalize_phraseology_compare(text: str) -> str:
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFD", text.lower())
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = normalized.replace("ş", "s").replace("ș", "s").replace("ţ", "t").replace("ț", "t")
+    normalized = normalized.replace("¹", "1").replace("²", "2").replace("³", "3")
+    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = re.sub(r"[^a-z0-9 ]+", "", normalized)
+    return normalized.strip()
+
+
+def _match_phraseology_html(
+    html_lines: list[str],
+    start_index: int,
+    expected_kind: str,
+    expected_body: str,
+) -> tuple[str | None, int]:
+    target = _normalize_phraseology_compare(expected_body)
+    if not html_lines:
+        return None, start_index
+
+    for index in range(start_index, len(html_lines)):
+        html_line = html_lines[index]
+        plain = _html_to_plain_text(html_line)
+        match = PHRASEOLOGY_LINE_PATTERN.match(plain)
+        if not match:
+            continue
+        html_kind = match.group("kind").replace(" ", "").lower()
+        if html_kind != expected_kind:
+            continue
+        html_body = _normalize_phraseology_compare(match.group("body").strip())
+        if html_body == target:
+            return html_line, index + 1
+    return None, start_index
 
 
 def _article_length_stats(entries: list[dict]) -> dict:
@@ -681,6 +824,55 @@ def _article_year_stats(entries: list[dict]) -> dict:
     }
 
 
+def _extract_phraseology(article_text: str, header_text: str, article_html_lines: list[str] | None = None) -> dict:
+    result = {"expr": [], "prov": [], "loc": []}
+    html_lines = list(article_html_lines or [])
+    if html_lines:
+        html_header_plain = _html_to_plain_text(html_lines[0])
+        if html_header_plain.strip() == (header_text or "").strip():
+            html_lines = html_lines[1:]
+        html_lines = [line for line in html_lines if _html_to_plain_text(line)]
+    html_cursor = 0
+
+    text_lines = article_text.splitlines() if article_text else []
+    if text_lines and text_lines[0].strip() == (header_text or "").strip():
+        text_lines = text_lines[1:]
+
+    for raw_line in text_lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = PHRASEOLOGY_LINE_PATTERN.match(line)
+        if not match:
+            continue
+
+        kind = match.group("kind").replace(" ", "").lower()
+        bucket = "expr" if kind == "expr" else "prov" if kind == "prov" else "loc"
+        body = match.group("body").strip()
+        matched_html, html_cursor = _match_phraseology_html(html_lines, html_cursor, kind, body)
+        split_items = _split_phraseology_body(body)
+        single_item = len(split_items) == 1
+        for item in split_items:
+            register_source = " ".join(
+                part for part in [item["text"], _html_to_plain_text(matched_html or "") if single_item else ""]
+                if part
+            ).strip()
+            registers = list(dict.fromkeys(item["registre"] + _registers_from_text(register_source)))
+            result[bucket].append({
+                "text": item["text"],
+                "html": matched_html if single_item else None,
+                "registre": registers,
+            })
+
+    result["rezumat"] = {
+        "expr": len(result["expr"]),
+        "prov": len(result["prov"]),
+        "loc": len(result["loc"]),
+        "total": len(result["expr"]) + len(result["prov"]) + len(result["loc"]),
+    }
+    return result
+
+
 def _word_cloud_stats(entries: list[dict]) -> dict:
     ranked = []
     for entry in entries:
@@ -736,11 +928,22 @@ def build_dictionary_payload(txt_path: Path, docx_path: Path):
             if entry["articol_text"] and entry["articol_header"]
             else []
         )
+        phraseology = (
+            _extract_phraseology(
+                entry["articol_text"],
+                entry["articol_header"],
+                article_matches[0].get("articol_html_linii") if len(article_matches) == 1 else None,
+            )
+            if entry["articol_text"] and entry["articol_header"]
+            else {"expr": [], "prov": [], "loc": [], "rezumat": {"expr": 0, "prov": 0, "loc": 0, "total": 0}}
+        )
         entry["ani_atestare"] = sorted(article_years)
         entry["prima_atestare"] = _first_attestation_override_for_term(entry["termen"]) or (min(article_years) if article_years else None)
+        entry["frazeologie"] = phraseology
         entry["articole_candidate"] = [article["header_text"] for article in article_matches]
         entry["termen"] = _superscript_display(entry["termen"])
         entry["trimitere_la"] = _superscript_display(entry["trimitere_la"])
+        entry["trimitere_tinta_exacta"] = _superscript_display(entry.get("trimitere_tinta_exacta"))
         entry["lema_tinta"] = _superscript_display(entry["lema_tinta"])
         entry["leme_posibile"] = [_superscript_display(item) for item in entry["leme_posibile"]]
         entry["articol_header"] = _superscript_display(entry["articol_header"])

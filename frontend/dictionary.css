@@ -885,13 +885,40 @@ tbody td {
 .type-pill.lemma { color: var(--lemma); background: var(--lemma-bg); }
 .type-pill.variant { color: var(--variant); background: var(--variant-bg); }
 
+.phraseology-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.open-phraseology-button {
+  border: none;
+  background: rgba(180, 92, 61, 0.10);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.phraseology-separator {
+  color: rgba(109, 90, 67, 0.45);
+}
+
 .open-article-button,
+.open-reference-button,
 .secondary-button,
 .secondary-link {
   font: inherit;
 }
 
-.open-article-button {
+.open-article-button,
+.open-reference-button {
   border: none;
   background: transparent;
   padding: 0;
@@ -899,6 +926,13 @@ tbody td {
   font-weight: 800;
   cursor: pointer;
   text-align: left;
+}
+
+.open-reference-button {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .secondary-button,
@@ -945,6 +979,138 @@ tbody td {
 }
 
 .article-rich { color: var(--text); }
+.article-extracted {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 20px;
+}
+
+.phraseology-group {
+  border: 1px solid rgba(88, 62, 30, 0.10);
+  border-radius: 18px;
+  padding: 16px 16px 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.phraseology-group.focused {
+  border-color: rgba(180, 92, 61, 0.28);
+  box-shadow: 0 0 0 3px rgba(180, 92, 61, 0.08);
+}
+
+.phraseology-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.phraseology-group-header h3 {
+  margin: 0;
+  font-family: 'Fraunces', serif;
+  font-size: 1rem;
+}
+
+.phraseology-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(180, 92, 61, 0.12);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.phraseology-list {
+  display: grid;
+  gap: 10px;
+}
+
+.phraseology-item {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(88, 62, 30, 0.08);
+}
+
+.phraseology-item:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.phraseology-text {
+  line-height: 1.55;
+}
+
+.phraseology-text .docx-paragraph {
+  margin: 0;
+  white-space: break-spaces;
+  line-height: 1.65;
+}
+
+.phraseology-text .docx-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.phraseology-text .docx-bullet {
+  flex: 0 0 auto;
+  width: 20px;
+  font-weight: 700;
+}
+
+.phraseology-text .docx-content {
+  flex: 1 1 auto;
+}
+
+.phraseology-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.phraseology-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(47, 36, 23, 0.08);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.phraseology-dialog {
+  width: min(980px, calc(100vw - 32px));
+}
+
+.phraseology-modal-filters {
+  margin: 4px 0 0;
+}
+
+.phraseology-filter-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phraseology-filter-label {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.phraseology-filter-dropdown .type-filter-inline {
+  right: 0;
+  left: auto;
+}
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .article-rich .docx-paragraph {
   white-space: break-spaces;
   line-height: 1.7;

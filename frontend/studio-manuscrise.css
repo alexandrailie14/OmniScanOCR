@@ -359,6 +359,25 @@ button:hover,
   min-height: 0;
 }
 
+.preview-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.preview-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.icon-btn {
+  min-width: 56px;
+  padding-inline: 14px;
+}
+
 .preview-stage {
   position: relative;
   flex: 1;
@@ -786,6 +805,10 @@ button:hover,
 
   .preview-stage {
     min-height: 420px;
+  }
+
+  .preview-head-main {
+    align-items: flex-start;
   }
 }
 

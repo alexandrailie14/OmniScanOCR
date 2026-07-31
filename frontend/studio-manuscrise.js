@@ -36,6 +36,9 @@ const ocrMode = document.getElementById('ocr-mode');
 const runOcrBtn = document.getElementById('run-ocr');
 const rerunOcrBtn = document.getElementById('rerun-ocr');
 const pageImage = document.getElementById('page-image');
+const previewZoomOutBtn = document.getElementById('preview-zoom-out');
+const previewZoomInBtn = document.getElementById('preview-zoom-in');
+const previewZoomLabel = document.getElementById('preview-zoom-label');
 const splitGuide = document.getElementById('split-guide');
 const previewStage = document.getElementById('preview-stage');
 const previewEmpty = document.getElementById('preview-empty');
@@ -99,6 +102,8 @@ let currentFile = '';
 let totalPages = 0;
 let currentPage = 1;
 let currentPageBox = null;
+let previewZoomPercent = 100;
+let previewBaseWidth = 0;
 const pageTexts = new Map();
 let activeJobId = null;
 let activeJobTimer = null;
@@ -743,12 +748,60 @@ function setStudioVisible(isVisible) {
   studioApp.classList.toggle('hidden', !isVisible);
 }
 
+function getSelectedOcrMode() {
+  if (ocrMode.value === 'scan_page') return 'scan';
+  if (ocrMode.value === 'kraken_page') return 'kraken';
+  return 'document';
+}
+
+async function readJsonOrThrow(res) {
+  const raw = await res.text();
+  let data = null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch (_) {
+      if (!res.ok) {
+        throw new Error(raw.trim() || 'Serverul a întors un răspuns invalid.');
+      }
+      throw new Error('Răspuns invalid de la server.');
+    }
+  }
+  if (!res.ok) {
+    throw new Error((data && data.detail) || raw.trim() || 'Cererea a eșuat.');
+  }
+  return data || {};
+}
+
 function setStatus(message) {
   ocrStatus.textContent = message;
 }
 
 function setArticlesStatus(message) {
   articlesStatus.textContent = message || '';
+}
+
+function updatePreviewZoomButtons() {
+  if (previewZoomOutBtn) previewZoomOutBtn.disabled = previewZoomPercent <= 50;
+  if (previewZoomInBtn) previewZoomInBtn.disabled = previewZoomPercent >= 400;
+}
+
+function applyPreviewZoom() {
+  if (previewZoomLabel) {
+    previewZoomLabel.textContent = `${previewZoomPercent}%`;
+  }
+  if (pageImage && previewBaseWidth > 0) {
+    pageImage.style.width = `${Math.round((previewBaseWidth * previewZoomPercent) / 100)}px`;
+  } else if (pageImage) {
+    pageImage.style.removeProperty('width');
+  }
+  updatePreviewZoomButtons();
+  updateSplitGuide();
+}
+
+function changePreviewZoom(delta) {
+  previewZoomPercent = Math.max(25, Math.min(600, previewZoomPercent + delta));
+  applyPreviewZoom();
 }
 
 function setAnnotationFocusMode(isActive) {
@@ -2082,6 +2135,13 @@ async function loadPreview() {
   }
   pageImage.src = `/pdf/page_image/${encodeURIComponent(currentFile)}/${currentPage}?scale=${zoom}&rotation=${encodeURIComponent(getRotationValue())}&t=${Date.now()}`;
   pageImage.onload = () => {
+    const stageWidth = previewStage?.clientWidth || 0;
+    previewBaseWidth = Math.max(
+      pageImage.naturalWidth || 0,
+      pageImage.clientWidth || 0,
+      Math.round(stageWidth * 0.72)
+    );
+    applyPreviewZoom();
     previewEmpty.classList.add('hidden');
     pageImage.classList.remove('hidden');
     updateSplitGuide();
@@ -2152,7 +2212,7 @@ async function runOcr(force = false) {
       return;
     }
     try {
-      const mode = ocrMode.value === 'scan_page' ? 'scan' : 'document';
+      const mode = getSelectedOcrMode();
       const query = new URLSearchParams({
         file: currentFile,
         page: String(currentPage),
@@ -2160,7 +2220,7 @@ async function runOcr(force = false) {
         mode,
       });
       const res = await fetch(`/ocr/cache?${query.toString()}`);
-      const data = await res.json();
+      const data = await readJsonOrThrow(res);
       if (res.ok && data.found) {
         setEditorText(data.text || '');
         pageTexts.set(currentPage, data.text || '');
@@ -2176,33 +2236,42 @@ async function runOcr(force = false) {
   setStatus(force ? 'Refac OCR pe pagina curentă...' : 'Rulez OCR pe pagina curentă...');
   runOcrBtn.disabled = true;
   rerunOcrBtn.disabled = true;
+  const singlePageMode = getSelectedOcrMode();
+  const singlePageLabel =
+    singlePageMode === 'kraken'
+      ? `Kraken HTR rulează pentru pagina ${currentPage}...`
+      : `OCR rulează pentru pagina ${currentPage}...`;
+  setProgress(15, singlePageLabel);
 
   const form = new FormData();
   form.append('file', currentFile);
   form.append('page', String(currentPage));
   form.append('rotation', String(getRotationValue()));
+  form.append('mode', singlePageMode);
   form.append('auto_export', 'true');
 
-  const route = ocrMode.value === 'scan_page' ? '/scan/page' : '/ocr/google_page';
+  const route = singlePageMode === 'scan' ? '/scan/page' : '/ocr/google_page';
 
   try {
     const res = await fetch(route, { method: 'POST', body: form });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'OCR failed');
-    }
+    const data = await readJsonOrThrow(res);
     ocrOutput.value = data.text || '';
     storeCurrentText();
+    setProgress(100, `OCR complet pentru pagina ${currentPage}.`);
     setStatus(`OCR finalizat pentru pagina ${currentPage}.`);
     if (data.path) {
       exportLink.href = data.path;
       exportLink.classList.remove('hidden');
     }
   } catch (err) {
+    resetProgress();
     setStatus(err.message || 'OCR failed.');
   } finally {
     runOcrBtn.disabled = false;
     rerunOcrBtn.disabled = false;
+    setTimeout(() => {
+      if (!activeJobId) resetProgress();
+    }, 500);
   }
 }
 
@@ -2212,7 +2281,7 @@ async function startDocumentJob(start, end, labelPrefix) {
     return;
   }
 
-  const mode = ocrMode.value === 'scan_page' ? 'scan' : 'document';
+  const mode = getSelectedOcrMode();
   setStatus(`${labelPrefix} ${start}-${end}...`);
   stopJobPolling();
   activeJobId = null;
@@ -2230,10 +2299,7 @@ async function startDocumentJob(start, end, labelPrefix) {
 
   try {
     const res = await fetch('/ocr/google_document_async', { method: 'POST', body: form });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'OCR document failed');
-    }
+    const data = await readJsonOrThrow(res);
     activeJobId = data.job_id;
     pollJobStatus();
   } catch (err) {
@@ -2258,10 +2324,7 @@ async function pollJobStatus() {
   if (!activeJobId) return;
   try {
     const res = await fetch(`/ocr/job/${encodeURIComponent(activeJobId)}`);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'Nu am putut citi progresul jobului.');
-    }
+    const data = await readJsonOrThrow(res);
 
     const total = Number(data.total_pages || totalPages || 0);
     const current = Number(data.current_page || 0);
@@ -2492,25 +2555,27 @@ logoutBtn.addEventListener('click', async () => {
 
 uploadBtn.addEventListener('click', async () => {
   if (!fileInput.files.length) {
-    setStatus('Alege cel puțin un PDF pentru upload.');
+    setStatus('Alege cel puțin un PDF sau una ori mai multe imagini pentru upload.');
     return;
   }
   uploadBtn.disabled = true;
   try {
-    let lastUploadedName = '';
-    for (const file of Array.from(fileInput.files)) {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/upload', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `Upload failed for ${file.name}`);
-      lastUploadedName = data.filename || file.name;
-    }
+    const selectedFiles = Array.from(fileInput.files);
+    const form = new FormData();
+    selectedFiles.forEach((file) => form.append('files', file));
+    const res = await fetch('/upload', { method: 'POST', body: form });
+    const data = await readJsonOrThrow(res);
     fileInput.value = '';
     await refreshFiles();
-    if (lastUploadedName) {
-      await selectFile(lastUploadedName);
-      setStatus(`Upload finalizat. Document activ: ${lastUploadedName}. Split master-ul lui va fi separat.`);
+    const uploadedName = data.filename || '';
+    if (uploadedName) {
+      await selectFile(uploadedName);
+      if (data.source_type === 'images') {
+        const pages = Number(data.page_count || selectedFiles.length || 1);
+        setStatus(`Upload finalizat. Am convertit ${pages} imagini într-un document unic: ${uploadedName}.`);
+      } else {
+        setStatus(`Upload finalizat. Document activ: ${uploadedName}. Split master-ul lui va fi separat.`);
+      }
     } else {
       setStatus('Upload finalizat.');
     }
@@ -2607,6 +2672,14 @@ zoomRange.addEventListener('input', () => {
 zoomRange.addEventListener('change', async () => {
   if (!currentFile) return;
   await loadPreview();
+});
+
+previewZoomOutBtn?.addEventListener('click', () => {
+  changePreviewZoom(-25);
+});
+
+previewZoomInBtn?.addEventListener('click', () => {
+  changePreviewZoom(25);
 });
 
 rotationInput.addEventListener('change', async () => {
@@ -3046,3 +3119,4 @@ loadSession();
 updateTextHistoryButtons();
 customAnnotationTags = loadCustomAnnotationTags();
 renderAnnotationState();
+applyPreviewZoom();

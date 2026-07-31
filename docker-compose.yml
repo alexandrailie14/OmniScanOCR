@@ -1,25 +1,38 @@
 services:
   app:
     build:
-      context: ..
-      dockerfile: webapp/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "8050:8000"
+      - "${APP_PORT:-8050}:8000"
     environment:
-      - ADMIN_USER=admin
-      - ADMIN_PASS=admin123
-      - SECRET_KEY=change-me
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-change-me}
+      - SECRET_KEY=${SECRET_KEY:-change-me}
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp_key.json
+      - KRAKEN_MODEL_PATH=/models/${KRAKEN_MODEL_FILENAME:-FoNDUE-GD_v2_fr.mlmodel}
+      - KRAKEN_DEVICE=${KRAKEN_DEVICE:-cpu}
+      - IMG_OCR_WORKBENCH_DIR=/opt/pdf-ocr-workbench
     volumes:
-      - ./data:/app/../data
-      - ../ocr-key.json:/run/secrets/gcp_key.json:ro
+      - webapp_data:/data
+      - ./models:/models:ro
+      - ./secrets:/run/secrets:ro
+      - ./vendor/pdf-ocr-workbench:/opt/pdf-ocr-workbench:ro
     restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel run --token ${TUNNEL_TOKEN}
+    profiles: ["tunnel"]
+    command:
+      - tunnel
+      - run
+      - --token
+      - ${TUNNEL_TOKEN:-}
     environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
     depends_on:
       - app
     restart: unless-stopped
+
+volumes:
+  webapp_data:

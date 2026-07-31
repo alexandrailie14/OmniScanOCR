@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OmniScan</title>
-  <link rel="stylesheet" href="/static/studio.css?v=14" />
+  <link rel="stylesheet" href="/static/studio.css?v=17" />
 </head>
 <body>
   <div class="shell">
@@ -47,8 +47,8 @@
 
           <div class="upload-card">
             <label class="upload-field">
-              <span>PDF-uri</span>
-              <input type="file" id="file-input" accept=".pdf,application/pdf" multiple />
+              <span>PDF sau imagini</span>
+              <input type="file" id="file-input" accept=".pdf,application/pdf,image/png,image/jpeg,image/jpg,image/webp,image/bmp,image/tif,image/tiff,image/heic,image/heif,image/avif" multiple />
             </label>
             <button id="upload-btn" class="primary-btn">Upload</button>
           </div>
@@ -167,14 +167,31 @@
               <button id="split-selection-pdf" class="secondary-btn">Split PDF selecție</button>
               <button id="split-pdf" class="secondary-btn">Split tot PDF-ul</button>
             </div>
+            <div class="progress-block hidden split-progress-block" id="split-progress-block">
+              <div class="progress-meta">
+                <span id="split-progress-label">Se pregătește split-ul...</span>
+                <span class="split-loading-wrap">
+                  <span class="split-spinner" aria-hidden="true"></span>
+                  <span id="split-progress-value">În curs</span>
+                </span>
+              </div>
+              <div class="progress-track progress-track-indeterminate">
+                <div id="split-progress-bar" class="progress-bar progress-bar-indeterminate"></div>
+              </div>
+            </div>
           </section>
 
           <div class="preview-grid">
             <section class="panel preview-panel">
               <div class="panel-head">
-                <div>
+                <div class="preview-head-main">
                   <h2>Preview</h2>
                   <p id="doc-meta">Alege un PDF pentru a începe.</p>
+                  <div class="preview-zoom-controls" aria-label="Zoom preview">
+                    <button id="preview-zoom-out" type="button" class="secondary-btn icon-btn" title="Micșorează imaginea">🔍−</button>
+                    <span id="preview-zoom-label" class="pill">100%</span>
+                    <button id="preview-zoom-in" type="button" class="secondary-btn icon-btn" title="Mărește imaginea">🔍+</button>
+                  </div>
                 </div>
                 <span id="page-badge" class="pill">Pagina -</span>
               </div>
@@ -202,7 +219,7 @@
                   <button id="run-selection-ocr" class="primary-btn">OCR selecție</button>
                   <button id="run-document-ocr" class="secondary-btn">OCR tot PDF-ul</button>
                   <button id="import-txt" class="secondary-btn">Import TXT</button>
-                  <button id="export-articles" class="secondary-btn">Export TXT</button>
+                  <button id="export-articles" class="secondary-btn">Bulk export TXT</button>
                   <button id="save-progress" class="secondary-btn">Salvează progres</button>
                   <button id="export-json" class="secondary-btn">Export JSON</button>
                 </div>
@@ -224,7 +241,7 @@
               </div>
               <p id="articles-status" class="muted"></p>
               <div id="articles-actions" class="articles-actions hidden">
-                <button id="view-exported-docs" class="secondary-btn" type="button">Verifică documente exportate</button>
+                <button id="view-exported-docs" class="secondary-btn" type="button">Vezi fișierele exportate</button>
               </div>
               <div id="exported-articles-wrap" class="exported-articles hidden">
                 <p id="articles-folder" class="muted"></p>
@@ -237,6 +254,6 @@
     </main>
   </div>
 
-  <script src="/static/studio.js?v=14"></script>
+  <script src="/static/studio.js?v=32"></script>
 </body>
 </html>

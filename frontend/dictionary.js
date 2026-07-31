@@ -54,8 +54,15 @@ const homeLink = document.getElementById("homeLink");
 const articleModal = document.getElementById("articleModal");
 const articleModalTitle = document.getElementById("articleModalTitle");
 const articleModalMeta = document.getElementById("articleModalMeta");
+const articleModalExtracted = document.getElementById("articleModalExtracted");
 const articleModalBody = document.getElementById("articleModalBody");
 const closeArticleModalButton = document.getElementById("closeArticleModal");
+const phraseologyModal = document.getElementById("phraseologyModal");
+const phraseologyModalTitle = document.getElementById("phraseologyModalTitle");
+const phraseologyModalMeta = document.getElementById("phraseologyModalMeta");
+const phraseologyModalFilters = document.getElementById("phraseologyModalFilters");
+const phraseologyModalBody = document.getElementById("phraseologyModalBody");
+const closePhraseologyModalButton = document.getElementById("closePhraseologyModal");
 
 let currentEntries = [];
 let activePosFilters = new Set();
@@ -71,6 +78,7 @@ let firstAttestationScatterData = null;
 let scatterModalState = { viewX: 0, viewY: 0, viewWidth: 1100, viewHeight: 320, dragging: false, dragX: 0, dragY: 0 };
 let selectedTrendTerms = [];
 let currentWordCloudData = null;
+let phraseologyModalState = { entry: null, focus: null, register: "all" };
 
 const donutPalette = [
   "#b45c3d",
@@ -103,6 +111,71 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function stripHtml(value) {
+  return String(value || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSpacedAbbreviation(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "");
+}
+
+function getPhraseologyRegisters(item) {
+  const direct = Array.isArray(item?.registre) ? item.registre.filter(Boolean) : [];
+  if (direct.length) {
+    return direct;
+  }
+
+  const source = [item?.text || "", stripHtml(item?.html || "")]
+    .filter(Boolean)
+    .join(" ");
+  const found = [];
+  const patterns = [
+    ["Arg.", /\barg\.\b/i],
+    ["Fam.", /\bfam\.\b/i],
+    ["Pop.", /\bpop\.\b/i],
+    ["Reg.", /\breg\.\b/i],
+    ["Fig.", /\bfig\.\b/i],
+    ["Înv.", /\b[iî]nv\.\b/i],
+    ["Rar.", /\brar\.\b/i],
+  ];
+
+  patterns.forEach(([label, pattern]) => {
+    if (pattern.test(source)) {
+      found.push(label);
+    }
+  });
+  return found;
+}
+
+function getLocutionTypes(item) {
+  const source = [item?.text || "", stripHtml(item?.html || "")]
+    .filter(Boolean)
+    .join(" ");
+  const compact = normalizeSpacedAbbreviation(source);
+  const types = [];
+  const patterns = [
+    ["Loc. adv.", /adv\./],
+    ["Loc. adj.", /adj\./],
+    ["Loc. prep.", /prep\./],
+    ["Loc. conj.", /conj\./],
+  ];
+  patterns.forEach(([label, pattern]) => {
+    if (pattern.test(compact)) {
+      types.push(label);
+    }
+  });
+  return types;
 }
 
 function withSuperscriptIndex(term) {
@@ -766,6 +839,10 @@ function openArticleModal(entry) {
   if (!entry?.articol_html) return;
   articleModalTitle.innerHTML = formatDisplayTerm(entry.termen);
   articleModalMeta.textContent = entry.informatie_gramaticala || "";
+  if (articleModalExtracted) {
+    articleModalExtracted.hidden = true;
+    articleModalExtracted.innerHTML = "";
+  }
   articleModalBody.innerHTML = entry.articol_html;
   articleModal.hidden = false;
   document.body.classList.add("modal-open");
@@ -773,7 +850,208 @@ function openArticleModal(entry) {
 
 function closeArticleModal() {
   articleModal.hidden = true;
+  if (articleModalExtracted) {
+    articleModalExtracted.hidden = true;
+    articleModalExtracted.innerHTML = "";
+  }
   articleModalBody.innerHTML = "";
+  document.body.classList.remove("modal-open");
+}
+
+function buildPhraseologyMarkup(entry, focus = null) {
+  const phraseology = entry?.frazeologie;
+  const allGroups = [
+    ["Expr.", phraseology?.expr || []],
+    ["Prov.", phraseology?.prov || []],
+    ["Loc.", phraseology?.loc || []],
+  ].filter(([, items]) => items.length);
+  const groups = focus ? allGroups.filter(([label]) => label === focus) : allGroups;
+
+  if (!groups.length) {
+    return "";
+  }
+
+  return groups.map(([label, items]) => `
+    <section class="phraseology-group${focus === label ? " focused" : ""}">
+      <div class="phraseology-group-header">
+        <h3>${label}</h3>
+        <span class="phraseology-count">${items.length}</span>
+      </div>
+      <div class="phraseology-list">
+        ${items.map((item) => `
+          <div class="phraseology-item">
+            <div class="phraseology-text">${item.html || escapeHtml(item.text)}</div>
+            ${getPhraseologyRegisters(item).length ? `<div class="phraseology-badges">${getPhraseologyRegisters(item).map((tag) => `<span class="phraseology-badge">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `).join("");
+}
+
+function getPhraseologyItemsByFocus(entry, focus) {
+  if (focus === "Expr.") return entry?.frazeologie?.expr || [];
+  if (focus === "Prov.") return entry?.frazeologie?.prov || [];
+  if (focus === "Loc.") return entry?.frazeologie?.loc || [];
+  return [];
+}
+
+function buildPhraseologyFilterMarkup(entry, focus, activeRegister = "all") {
+  if (!["Expr.", "Loc."].includes(focus)) {
+    return "";
+  }
+
+  const items = getPhraseologyItemsByFocus(entry, focus);
+  if (!items.length) {
+    return "";
+  }
+
+  let options = [];
+  let label = "Clasificare Expr.";
+
+  if (focus === "Loc.") {
+    label = "Clasificare Loc.";
+    const counts = new Map();
+    let untypedCount = 0;
+    items.forEach((item) => {
+      const types = getLocutionTypes(item);
+      if (!types.length) {
+        untypedCount += 1;
+        return;
+      }
+      types.forEach((type) => {
+        counts.set(type, (counts.get(type) || 0) + 1);
+      });
+    });
+
+    options = [
+      { value: "all", label: "Toate", count: items.length },
+      ...Array.from(counts.entries()).map(([value, count]) => ({ value, label: value, count })),
+    ];
+    if (untypedCount) {
+      options.push({ value: "__none__", label: "Fără tip", count: untypedCount });
+    }
+  } else {
+    const counts = new Map();
+    let unmarkedCount = 0;
+    items.forEach((item) => {
+      const registers = getPhraseologyRegisters(item);
+      if (!registers.length) {
+        unmarkedCount += 1;
+        return;
+      }
+      registers.forEach((tag) => {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      });
+    });
+
+    options = [
+      { value: "all", label: "Toate", count: items.length },
+      ...Array.from(counts.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], "ro"))
+        .map(([value, count]) => ({ value, label: value, count })),
+    ];
+    if (unmarkedCount) {
+      options.push({ value: "__none__", label: "Fără marcaj", count: unmarkedCount });
+    }
+  }
+
+  if (options.length <= 1) {
+    return "";
+  }
+
+  return `
+    <div class="phraseology-filter-row">
+      <span class="phraseology-filter-label">${label}</span>
+      <details class="type-filter-dropdown phraseology-filter-dropdown">
+        <summary aria-label="Filtru expresii"></summary>
+        <div class="type-filter-inline phraseology-filter-inline">
+          ${options.map((option) => `
+            <button
+              class="type-filter phraseology-register-filter${activeRegister === option.value ? " active" : ""}"
+              type="button"
+              data-phraseology-register="${escapeHtml(option.value)}"
+            >${escapeHtml(option.label)} (${option.count})</button>
+          `).join("")}
+        </div>
+      </details>
+    </div>
+  `;
+}
+
+function renderPhraseologyModal() {
+  const { entry, focus, register } = phraseologyModalState;
+  if (!entry || !phraseologyModal || !phraseologyModalBody) return;
+
+  let renderedEntry = entry;
+  if (["Expr.", "Loc."].includes(focus) && register !== "all") {
+    const bucket = focus === "Loc." ? "loc" : "expr";
+    const filteredItems = (getPhraseologyItemsByFocus(entry, focus) || []).filter((item) => {
+      if (focus === "Loc.") {
+        const types = getLocutionTypes(item);
+        if (register === "__none__") {
+          return !types.length;
+        }
+        return types.includes(register);
+      }
+      if (register === "__none__") {
+        return !getPhraseologyRegisters(item).length;
+      }
+      return getPhraseologyRegisters(item).includes(register);
+    });
+    renderedEntry = {
+      ...entry,
+      frazeologie: {
+        ...entry.frazeologie,
+        [bucket]: filteredItems,
+      },
+    };
+  }
+
+  const markup = buildPhraseologyMarkup(renderedEntry, focus);
+  if (!markup) return;
+
+  phraseologyModalTitle.innerHTML = formatDisplayTerm(entry.termen);
+  phraseologyModalMeta.textContent = [focus, entry.informatie_gramaticala].filter(Boolean).join(" · ");
+  if (phraseologyModalFilters) {
+    const filtersMarkup = buildPhraseologyFilterMarkup(entry, focus, register);
+    phraseologyModalFilters.hidden = !filtersMarkup;
+    phraseologyModalFilters.innerHTML = filtersMarkup;
+  }
+  phraseologyModalBody.innerHTML = markup;
+  phraseologyModal.hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function renderExtractedPhraseology(entry) {
+  if (!articleModalExtracted) return;
+  const markup = buildPhraseologyMarkup(entry);
+  if (!markup) {
+    articleModalExtracted.hidden = true;
+    articleModalExtracted.innerHTML = "";
+    return;
+  }
+  articleModalExtracted.hidden = false;
+  articleModalExtracted.innerHTML = markup;
+}
+
+function openPhraseologyModal(entry, focus = null) {
+  if (!phraseologyModal || !phraseologyModalBody) return;
+  phraseologyModalState = { entry, focus, register: "all" };
+  renderPhraseologyModal();
+}
+
+function closePhraseologyModal() {
+  if (!phraseologyModal) return;
+  phraseologyModal.hidden = true;
+  phraseologyModalState = { entry: null, focus: null, register: "all" };
+  if (phraseologyModalBody) {
+    phraseologyModalBody.innerHTML = "";
+  }
+  if (phraseologyModalFilters) {
+    phraseologyModalFilters.hidden = true;
+    phraseologyModalFilters.innerHTML = "";
+  }
   document.body.classList.remove("modal-open");
 }
 
@@ -841,6 +1119,31 @@ function renderLengthRanking(lengthData) {
   lengthFilterVariant.classList.toggle("active", activeLengthType === "variant");
 }
 
+function findReferenceTargetEntry(entry, entries) {
+  if (!entry?.trimitere_la) return null;
+
+  const candidates = [];
+  if (entry.trimitere_tinta_exacta) {
+    candidates.push(entry.trimitere_tinta_exacta);
+  }
+  if (entry.lema_tinta) {
+    candidates.push(entry.lema_tinta);
+  }
+  candidates.push(entry.trimitere_la);
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeForSearch(candidate);
+    const match = entries.find((item) =>
+      normalizeForSearch(item.termen) === normalizedCandidate && item.articol_html,
+    );
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
 function renderEntries(entries) {
   currentEntries = entries;
   entriesBody.innerHTML = "";
@@ -873,14 +1176,26 @@ function renderEntries(entries) {
       : candidateTitles?.length
         ? `<span class="candidate-list">${candidateTitles.join(" | ")}</span>`
         : "—";
+    const referenceTarget = findReferenceTargetEntry(entry, entries);
+    const referenceCell = referenceTarget
+      ? `<button class="open-reference-button" type="button" data-reference-index="${entries.indexOf(referenceTarget)}">${formatDisplayTerm(entry.trimitere_la || referenceTarget.termen)}</button>`
+      : formatDisplayTerm(entry.trimitere_la || "—");
+    const phraseologySummary = entry.frazeologie?.rezumat?.total
+      ? [
+          entry.frazeologie.rezumat.expr ? `<button class="open-phraseology-button" type="button" data-entry-index="${entryIndex}" data-phraseology-focus="Expr.">Expr. ${entry.frazeologie.rezumat.expr}</button>` : null,
+          entry.frazeologie.rezumat.prov ? `<button class="open-phraseology-button" type="button" data-entry-index="${entryIndex}" data-phraseology-focus="Prov.">Prov. ${entry.frazeologie.rezumat.prov}</button>` : null,
+          entry.frazeologie.rezumat.loc ? `<button class="open-phraseology-button" type="button" data-entry-index="${entryIndex}" data-phraseology-focus="Loc.">Loc. ${entry.frazeologie.rezumat.loc}</button>` : null,
+        ].filter(Boolean).join('<span class="phraseology-separator">·</span>')
+      : "—";
 
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${articleCell}</td>
       <td><div class="grammar-cell">${escapeHtml(entry.informatie_gramaticala || "—")}</div></td>
       <td>${entry.prima_atestare || "—"}</td>
+      <td><div class="phraseology-summary">${phraseologySummary}</div></td>
       <td><span class="type-pill ${entry.tip === "variantă" ? "variant" : "lemma"}">${entry.tip}</span></td>
-      <td>${formatDisplayTerm(entry.trimitere_la || "—")}</td>
+      <td>${referenceCell}</td>
     `;
     entriesBody.appendChild(row);
   });
@@ -1089,14 +1404,45 @@ async function loadDictionarySummary() {
 
 entriesBody.addEventListener("click", (event) => {
   const button = event.target.closest(".open-article-button");
-  if (!button) return;
-  openArticleModal(currentEntries[Number(button.dataset.entryIndex)]);
+  if (button) {
+    openArticleModal(currentEntries[Number(button.dataset.entryIndex)]);
+    return;
+  }
+
+  const phraseologyButton = event.target.closest(".open-phraseology-button");
+  if (phraseologyButton) {
+    openPhraseologyModal(
+      currentEntries[Number(phraseologyButton.dataset.entryIndex)],
+      phraseologyButton.dataset.phraseologyFocus || null,
+    );
+    return;
+  }
+
+  const referenceButton = event.target.closest(".open-reference-button");
+  if (!referenceButton) return;
+  openArticleModal(currentEntries[Number(referenceButton.dataset.referenceIndex)]);
 });
 
 closeArticleModalButton.addEventListener("click", closeArticleModal);
 articleModal.addEventListener("click", (event) => {
   if (event.target.dataset.closeModal === "true") {
     closeArticleModal();
+  }
+});
+closePhraseologyModalButton?.addEventListener("click", closePhraseologyModal);
+phraseologyModal?.addEventListener("click", (event) => {
+  if (event.target.dataset.closePhraseologyModal === "true") {
+    closePhraseologyModal();
+    return;
+  }
+  const filterButton = event.target.closest(".phraseology-register-filter");
+  if (filterButton) {
+    phraseologyModalState.register = filterButton.dataset.phraseologyRegister || "all";
+    renderPhraseologyModal();
+    const details = filterButton.closest("details");
+    if (details) {
+      details.open = false;
+    }
   }
 });
 chronologyFirstAttestations.addEventListener("click", openScatterModal);
@@ -1151,6 +1497,9 @@ window.addEventListener("mouseup", () => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !articleModal.hidden) {
     closeArticleModal();
+  }
+  if (event.key === "Escape" && phraseologyModal && !phraseologyModal.hidden) {
+    closePhraseologyModal();
   }
   if (event.key === "Escape" && !scatterModal.hidden) {
     closeScatterModal();

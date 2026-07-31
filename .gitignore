@@ -1,21 +1,20 @@
-# Secrets / env
 .env
-.env.*
-ocr-key.json
-*.pem
-*.key
+.env.local
+.env.*.local
+tunel.env
 
-# App data (uploads, exports, users)
+# Secrets
+ocr-key.json
+secrets/*
+!secrets/.gitkeep
+
+# Runtime data
 data/
 backend/data/
-frontend/data/
 
-# Uploaded/processed files
-*.pdf
-*.txt
-*.json
-*.csv
-*.zip
+# Local workbench vendor clone
+vendor/pdf-ocr-workbench/*
+!vendor/pdf-ocr-workbench/.gitkeep
 
 # Python
 __pycache__/
@@ -25,22 +24,14 @@ __pycache__/
 .venv/
 venv/
 
-# Node / frontend
-node_modules/
-
-# OS
+# OS / editors
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs / archives
 *.log
-
-# Docker
 *.tar
 
-# Local build artifacts
+# Build artifacts
 build/
 dist/
-
-# Cloudflare tunnel env
-tunel.env

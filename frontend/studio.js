@@ -30,6 +30,10 @@ const splitTools = document.getElementById('split-tools');
 const splitShiftInput = document.getElementById('split-shift');
 const splitSelectionPdfBtn = document.getElementById('split-selection-pdf');
 const splitPdfBtn = document.getElementById('split-pdf');
+const splitProgressBlock = document.getElementById('split-progress-block');
+const splitProgressLabel = document.getElementById('split-progress-label');
+const splitProgressValue = document.getElementById('split-progress-value');
+const splitProgressBar = document.getElementById('split-progress-bar');
 const removeSplitPagesBtn = document.getElementById('remove-split-pages');
 const rotationInput = document.getElementById('rotation-input');
 const rotMinus5Btn = document.getElementById('rot-minus-5');
@@ -41,6 +45,9 @@ const ocrMode = document.getElementById('ocr-mode');
 const runOcrBtn = document.getElementById('run-ocr');
 const rerunOcrBtn = document.getElementById('rerun-ocr');
 const pageImage = document.getElementById('page-image');
+const previewZoomOutBtn = document.getElementById('preview-zoom-out');
+const previewZoomInBtn = document.getElementById('preview-zoom-in');
+const previewZoomLabel = document.getElementById('preview-zoom-label');
 const splitGuide = document.getElementById('split-guide');
 const previewStage = document.getElementById('preview-stage');
 const previewEmpty = document.getElementById('preview-empty');
@@ -73,6 +80,8 @@ const ocrProgressLabel = document.getElementById('ocr-progress-label');
 const ocrProgressValue = document.getElementById('ocr-progress-value');
 const ocrProgressBar = document.getElementById('ocr-progress-bar');
 
+const PREVIEW_FETCH_SCALE = 2.4;
+
 let files = [];
 let currentUser = '';
 let isAdmin = false;
@@ -80,6 +89,8 @@ let currentFile = '';
 let totalPages = 0;
 let currentPage = 1;
 let currentPageBox = null;
+let previewZoomPercent = 100;
+let previewBaseWidth = 0;
 const pageTexts = new Map();
 let activeJobId = null;
 let activeJobTimer = null;
@@ -138,6 +149,22 @@ function setStatus(message) {
   ocrStatus.textContent = message;
 }
 
+async function readJsonOrThrow(response) {
+  const rawText = await response.text();
+  let payload = {};
+  if (rawText) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch (_) {
+      throw new Error(rawText.slice(0, 300) || 'Răspuns invalid de la server.');
+    }
+  }
+  if (!response.ok) {
+    throw new Error(payload.detail || payload.error || rawText || 'Cererea a eșuat.');
+  }
+  return payload;
+}
+
 function slugifyFileName(value) {
   return String(value || 'text')
     .normalize('NFD')
@@ -149,6 +176,29 @@ function slugifyFileName(value) {
 
 function setArticlesStatus(message) {
   articlesStatus.textContent = message || '';
+}
+
+function updatePreviewZoomButtons() {
+  if (previewZoomOutBtn) previewZoomOutBtn.disabled = previewZoomPercent <= 50;
+  if (previewZoomInBtn) previewZoomInBtn.disabled = previewZoomPercent >= 400;
+}
+
+function applyPreviewZoom() {
+  if (previewZoomLabel) {
+    previewZoomLabel.textContent = `${previewZoomPercent}%`;
+  }
+  if (pageImage && previewBaseWidth > 0) {
+    pageImage.style.width = `${Math.round((previewBaseWidth * previewZoomPercent) / 100)}px`;
+  } else if (pageImage) {
+    pageImage.style.removeProperty('width');
+  }
+  updatePreviewZoomButtons();
+  updateSplitGuide();
+}
+
+function changePreviewZoom(delta) {
+  previewZoomPercent = Math.max(50, Math.min(400, previewZoomPercent + delta));
+  applyPreviewZoom();
 }
 
 function renderAdminProgressEntries() {
@@ -310,6 +360,22 @@ function resetProgress() {
   ocrProgressBlock.classList.add('hidden');
 }
 
+function showSplitProgress(label) {
+  if (!splitProgressBlock) return;
+  splitProgressLabel.textContent = label || 'Se procesează split-ul...';
+  splitProgressValue.textContent = 'În curs';
+  splitProgressBar.style.width = '28%';
+  splitProgressBlock.classList.remove('hidden');
+}
+
+function hideSplitProgress() {
+  if (!splitProgressBlock) return;
+  splitProgressBar.style.width = '0%';
+  splitProgressValue.textContent = 'În curs';
+  splitProgressLabel.textContent = 'Se pregătește split-ul...';
+  splitProgressBlock.classList.add('hidden');
+}
+
 function stopJobPolling() {
   if (activeJobTimer) {
     clearTimeout(activeJobTimer);
@@ -424,14 +490,88 @@ function normalizeSentences(text) {
     return String(value || '').replace(/\[/g, '').replace(/\]/g, '');
   }
 
+  function applyTargetedReplacements(value) {
+    let out = String(value || '');
+    out = out.replace(/([.!?])\s+\[/g, '$1\n[');
+    out = out.replace(/\]\s+(Răspuns:|Întrebare:|Nota lui)/g, ']\n$1');
+    out = out.replace(/([.!?])\s+(Răspuns:|Întrebare:|Nota lui)/g, '$1\n$2');
+    out = out.replace(/\s+(Nota lui Hasdeu la fila \d+:)/g, '\n$1');
+    out = out.replace(/([.!?])\s+(\d{2,4}\*?\s+[A-ZĂÂÎȘȚ„«])/g, '$1\n$2');
+    out = out.replace(/\bIntrebare:/g, 'Întrebare:');
+    out = out.replace(/\bIngerul\b/g, 'Îngerul');
+    out = out.replace(/\bA toi\b/g, 'À toi');
+    out = out.replace(/\bA présent\b/g, 'À présent');
+    out = out.replace(/\bA tant[oô]t\b/g, 'À tantôt');
+    out = out.replace(/,,\s*B\.?\s*P\.?\s*Hasdeu\s*"/g, '„B.P. Hasdeu”');
+    out = out.replace(/"\s*B\.?\s*P\.?\s*Hasdeu\s*"/g, '„B.P. Hasdeu”');
+    out = out.replace(/[«“]/g, '„');
+    out = out.replace(/[»]/g, '”');
+    out = out.replace(/,,/g, '„');
+    out = out.replace(/''/g, '”');
+    out = out.replace(/"([^"\n]+)"/g, '„$1”');
+    out = out.replace(/„\s+/g, '„');
+    out = out.replace(/\s+”/g, '”');
+    out = out.replace(/„{2,}/g, '„');
+    out = out.replace(/”{2,}/g, '”');
+    out = out.replace(/„\s*B\.?\s*P\.?\s*Hasdeu\s*["”]?/g, '„B.P. Hasdeu”');
+    // Fix OCR-broken Romanian clitic hyphens, but keep dialogue dashes.
+    out = out.replace(/([A-Za-zĂÂÎȘȚăâîșț])\s*-\s*([A-Za-zĂÂÎȘȚăâîșț])/g, '$1-$2');
+    out = out.replace(/([A-Za-zÀ-ÖØ-öø-ÿ])\s*-\s*([A-Za-zÀ-ÖØ-öø-ÿ])/g, '$1-$2');
+    out = out.replace(/(^|\s)-([A-Za-zĂÂÎȘȚăâîșț])/g, '$1- $2');
+    const monthBracketRules = [
+      ['ian', 'uarie'],
+      ['feb', 'ruarie'],
+      ['mar', 'tie'],
+      ['apr', 'ilie'],
+      ['iun', 'ie'],
+      ['iul', 'ie'],
+      ['aug', 'ust'],
+      ['sept', 'embrie'],
+      ['oct', 'ombrie'],
+      ['noi', 'embrie'],
+      ['dec', 'embrie'],
+    ];
+    monthBracketRules.forEach(([root, suffix]) => {
+      out = out.replace(new RegExp(`\\b(${root})${suffix}\\]\\s*\\[18\\/(\\d{2})\\.`, 'gi'), `$1[${suffix}] [18]$2.`);
+      out = out.replace(new RegExp(`\\b(${root})${suffix}\\]\\s*\\[18\\](\\d{2})\\.`, 'gi'), `$1[${suffix}] [18]$2.`);
+      out = out.replace(new RegExp(`\\b(${root})${suffix}\\]\\s*\\[18\\]\\s*(\\d{2})\\.?`, 'gi'), `$1[${suffix}] [18]$2.`);
+      out = out.replace(new RegExp(`\\b(${root})${suffix}\\s*\\]\\s*\\[18\\](\\d{2})\\.?`, 'gi'), `$1[${suffix}] [18]$2.`);
+    });
+    out = out.replace(/\[18\]\s+(\d{2})/g, '[18]$1');
+    out = out.replace(/\[(\d{2})\]\s+(\d{2})/g, '[$1]$2');
+    out = out.replace(/([A-Za-zĂÂÎȘȚăâîșț])\s+\]/g, '$1]');
+    out = out.replace(/\[\s+([A-Za-zĂÂÎȘȚăâîșț0-9])/g, '[$1');
+    out = out.replace(/\b(ian)uarie\]\s*\[18\/(\d{2})\./gi, '$1[uarie] [18]$2.');
+    out = out.replace(/\b(ian)uarie\]\s*\[18\](\d{2})\./gi, '$1[uarie] [18]$2.');
+    out = out.replace(/\b(ian)uarie\s*\]\s*\[18\](\d{2})\./gi, '$1[uarie] [18]$2.');
+    out = out.replace(/\b(aug)ust\]\s*\[18\/(\d{2})\./gi, '$1[ust] [18]$2.');
+    out = out.replace(/\b(aug)ust\]\s*\[18\](\d{2})\./gi, '$1[ust] [18]$2.');
+    out = out.replace(/\b(aug)ust\s*\]\s*\[18\](\d{2})\.?/gi, '$1[ust] [18]$2.');
+    out = out.replace(/\bA\s+B\.\s*P\.\s*HASDEU\b/gi, '');
+    out = out.replace(/\bAT\s+B\.\s*P\.\s*HASDEU\b/gi, '');
+    out = out.replace(/\bAT\s+B\s+P\s+HASDEU\b/gi, '');
+    out = out.replace(/\bAB\.\s*P\.\s*HASDEU\b/gi, '');
+    out = out.replace(/\bAT2?B\.\s*P\.\s*HASDEU\b/gi, '');
+    out = out.replace(/\bAT2?B\s+P\s+HASDEU\b/gi, '');
+    // Remove inline editorial page numbers that interrupt a sentence,
+    // but keep session numbers that appear after archive refs on their own line.
+    out = out.replace(/([a-zăâîșț,;:])\s+\d{2,3}\s+(?=[A-ZĂÂÎȘȚ][a-zăâîșț])/g, '$1 ');
+    out = out.replace(/\s+([,.;:!?%)\]\}])/g, '$1');
+    out = out.replace(/([(\[„«])\s+/g, '$1');
+    out = out.replace(/([A-Za-zĂÂÎȘȚăâîșț])\s+\[([A-Za-zĂÂÎȘȚăâîșț])/g, '$1[$2');
+    out = out.replace(/[ \t]{2,}/g, ' ');
+    out = out.replace(/ *\n */g, '\n');
+    return out;
+  }
+
   function isArticleNumberLine(line) {
-    return /^\d{3,4}\*?$/.test(line.trim());
+    return /^\d{2,4}\*?$/.test(line.trim());
   }
 
   function isDateLine(line) {
     const src = normalizeBracketedDateText(line).trim().toLowerCase();
     if (!src) return false;
-    if (src === 'nedatat') return true;
+    if (src === 'nedatat' || src === 'nedatata') return true;
     if (!/\d/.test(src)) return false;
     return MONTHS.some((month) => src.includes(month));
   }
@@ -462,6 +602,46 @@ function normalizeSentences(text) {
       return src.replace(new RegExp(DOT_MARK, 'g'), '.');
     }
 
+    function splitSentences(src) {
+      const pieces = [];
+      let start = 0;
+      for (let i = 0; i < src.length; i += 1) {
+        const ch = src[i];
+        if (!'.!?'.includes(ch)) continue;
+
+        const prev = i > 0 ? src[i - 1] : '';
+        const next = i + 1 < src.length ? src[i + 1] : '';
+        if (/\d/.test(prev) && /\d/.test(next)) continue;
+
+        let punctEnd = i;
+        while (punctEnd + 1 < src.length && '.!?'.includes(src[punctEnd + 1])) {
+          punctEnd += 1;
+        }
+
+        let probe = punctEnd + 1;
+        while (probe < src.length && /\s/.test(src[probe])) probe += 1;
+        if (probe >= src.length) continue;
+        const lead = src[probe];
+        const tail = src.slice(probe);
+
+        const isEllipsis = punctEnd > i;
+        const shouldBreak =
+          /[A-ZĂÂÎȘȚ„«"\[(]/u.test(lead) ||
+          /^\d{2,4}\*?\s+[A-ZĂÂÎȘȚ„«]/u.test(tail) ||
+          (isEllipsis && /[A-ZĂÂÎȘȚ]/u.test(lead));
+
+        if (!shouldBreak) continue;
+
+        const piece = src.slice(start, punctEnd + 1).trim();
+        if (piece) pieces.push(piece);
+        start = punctEnd + 1;
+        i = punctEnd;
+      }
+      const tail = src.slice(start).trim();
+      if (tail) pieces.push(tail);
+      return pieces.filter(Boolean);
+    }
+
     let t = blockText.replace(/\r\n/g, '\n');
     t = t.replace(/([A-Za-zÀ-ÖØ-öø-ÿ])-\s*\n\s*([A-Za-zÀ-ÖØ-öø-ÿ])/g, '$1$2');
 
@@ -490,8 +670,7 @@ function normalizeSentences(text) {
     const out = [];
     merged.forEach((paragraph) => {
       const protectedText = protectAbbreviations(paragraph);
-      const chunks = protectedText
-        .split(/(?<=[.!?])\s+(?=[A-ZĂÂÎȘȚ„«"(\[])/u)
+      const chunks = splitSentences(protectedText)
         .map((value) => restoreAbbreviations(value).trim())
         .filter(Boolean);
       if (chunks.length) out.push(...chunks);
@@ -500,11 +679,33 @@ function normalizeSentences(text) {
     return out.join('\n');
   }
 
-  const rawLines = text.replace(/\r\n/g, '\n').split('\n');
+  const rawLines = applyTargetedReplacements(text).replace(/\r\n/g, '\n').split('\n');
   const normalizedLines = [];
   for (let i = 0; i < rawLines.length; i += 1) {
     const current = rawLines[i].replace(/\s+/g, ' ').trim();
     const next = i + 1 < rawLines.length ? rawLines[i + 1].replace(/\s+/g, ' ').trim() : '';
+    const articleLine = current.match(/^(\d{2,4}\*?)\s+(.+)$/);
+    if (articleLine && isDateLine(articleLine[2])) {
+      normalizedLines.push(articleLine[1].trim());
+      normalizedLines.push(articleLine[2].trim().replace(/\.*$/, '.'));
+      continue;
+    }
+    const archiveWithTail = current.match(/^(\((?:.*?arh.*?\)))(?:\s+)(\d{2,4}\*?)(?:\s+)(.+)$/i);
+    if (archiveWithTail) {
+      const archiveLine = archiveWithTail[1].trim();
+      const articleNo = archiveWithTail[2].trim();
+      const tail = archiveWithTail[3].trim();
+      normalizedLines.push(archiveLine);
+      normalizedLines.push(articleNo);
+      const tailDate = tail.match(/^((?:\d{1,2}\s+[A-Za-zăâîșțĂÂÎȘȚ\[\]\/]+(?:\s+\[18\]?\d{2}|\s+\[18\/\d{2}\.?)?))\s+(Eu,.*)$/i);
+      if (tailDate) {
+        normalizedLines.push(tailDate[1].trim().replace(/\.*$/, '.'));
+        normalizedLines.push(tailDate[2].trim());
+      } else {
+        normalizedLines.push(tail);
+      }
+      continue;
+    }
     if (isDateLine(current) && isArticleNumberLine(next)) {
       normalizedLines.push(next);
       normalizedLines.push(current);
@@ -563,7 +764,7 @@ function normalizeSentences(text) {
     }
     out.push(value);
   });
-  return out.join('\n');
+  return applyTargetedReplacements(out.join('\n'));
 }
 
 function storeCurrentText() {
@@ -714,7 +915,8 @@ async function loadMeta() {
 async function loadPreview() {
   if (!currentFile) return;
   setDocMeta();
-  const zoom = Number(zoomRange.value) / 100;
+  const zoomValue = Number(zoomRange.value || 160);
+  previewBaseWidth = Math.max(420, Math.round(980 * (zoomValue / 160)));
   try {
     const boxRes = await fetch(`/pdf/page_box/${encodeURIComponent(currentFile)}/${currentPage}`);
     if (boxRes.ok) {
@@ -725,10 +927,12 @@ async function loadPreview() {
   } catch (_) {
     currentPageBox = null;
   }
-  pageImage.src = `/pdf/page_image/${encodeURIComponent(currentFile)}/${currentPage}?scale=${zoom}&rotation=${encodeURIComponent(getRotationValue())}&t=${Date.now()}`;
+  pageImage.style.removeProperty('width');
+  pageImage.src = `/pdf/page_image/${encodeURIComponent(currentFile)}/${currentPage}?scale=${PREVIEW_FETCH_SCALE}&rotation=${encodeURIComponent(getRotationValue())}&t=${Date.now()}`;
   pageImage.onload = () => {
     previewEmpty.classList.add('hidden');
     pageImage.classList.remove('hidden');
+    applyPreviewZoom();
     updateSplitGuide();
   };
   pageImage.onerror = () => {
@@ -1034,25 +1238,27 @@ logoutBtn.addEventListener('click', async () => {
 
 uploadBtn.addEventListener('click', async () => {
   if (!fileInput.files.length) {
-    setStatus('Alege cel puțin un PDF pentru upload.');
+    setStatus('Alege cel puțin un PDF sau una ori mai multe imagini pentru upload.');
     return;
   }
   uploadBtn.disabled = true;
   try {
-    let lastUploadedName = '';
-    for (const file of Array.from(fileInput.files)) {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/upload', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `Upload failed for ${file.name}`);
-      lastUploadedName = data.filename || file.name;
-    }
+    const selectedFiles = Array.from(fileInput.files);
+    const form = new FormData();
+    selectedFiles.forEach((file) => form.append('files', file));
+    const res = await fetch('/upload', { method: 'POST', body: form });
+    const data = await readJsonOrThrow(res);
     fileInput.value = '';
     await refreshFiles();
-    if (lastUploadedName) {
-      await selectFile(lastUploadedName);
-      setStatus(`Upload finalizat. Document activ: ${lastUploadedName}. Split master-ul lui va fi separat.`);
+    const uploadedName = data.filename || '';
+    if (uploadedName) {
+      await selectFile(uploadedName);
+      if (data.source_type === 'images') {
+        const pages = Number(data.page_count || selectedFiles.length || 1);
+        setStatus(`Upload finalizat. Am convertit ${pages} imagini într-un document unic: ${uploadedName}.`);
+      } else {
+        setStatus(`Upload finalizat. Document activ: ${uploadedName}. Split master-ul lui va fi separat.`);
+      }
     } else {
       setStatus('Upload finalizat.');
     }
@@ -1128,11 +1334,23 @@ nextPageBtn.addEventListener('click', async () => {
 
 zoomRange.addEventListener('input', () => {
   zoomLabel.textContent = `${zoomRange.value}%`;
+  if (!currentFile) return;
+  previewBaseWidth = Math.max(420, Math.round(980 * (Number(zoomRange.value) / 160)));
+  applyPreviewZoom();
 });
 
 zoomRange.addEventListener('change', async () => {
   if (!currentFile) return;
-  await loadPreview();
+  previewBaseWidth = Math.max(420, Math.round(980 * (Number(zoomRange.value) / 160)));
+  applyPreviewZoom();
+});
+
+previewZoomOutBtn?.addEventListener('click', () => {
+  changePreviewZoom(-10);
+});
+
+previewZoomInBtn?.addEventListener('click', () => {
+  changePreviewZoom(10);
 });
 
 rotationInput.addEventListener('change', async () => {
@@ -1259,26 +1477,49 @@ exportArticlesBtn.addEventListener('click', async () => {
   const text = ocrOutput.value || '';
   if (!text.trim()) {
     setStatus('Nu există text pentru export.');
+    setArticlesStatus('Nu există text pentru bulk export.');
     return;
   }
-  const suggestedName = `${slugifyFileName(currentFile || 'ocr-corectat')}.txt`;
-  const chosenName = window.prompt('Numele fișierului TXT:', suggestedName);
-  if (chosenName === null) {
-    setStatus('Exportul TXT a fost anulat.');
+  if (!currentFile) {
+    setStatus('Selectează mai întâi documentul mare din care vrei bulk export.');
+    setArticlesStatus('Bulk export oprit: nu există document activ.');
     return;
   }
-  const safeName = String(chosenName).trim() || suggestedName;
-  const finalName = safeName.toLowerCase().endsWith('.txt') ? safeName : `${safeName}.txt`;
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = objectUrl;
-  link.download = finalName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
-  setStatus(`TXT exportat: ${finalName}.`);
+
+  exportArticlesBtn.disabled = true;
+  try {
+    const res = await fetch('/articles/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file: currentFile,
+        text,
+        cleanup: false,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Nu am putut face bulk export TXT.');
+    }
+
+    lastExportedArticles = Array.isArray(data.files) ? data.files : [];
+    lastExportedDocId = data.doc_id || '';
+    lastExportedFolder = data.folder || '';
+    articlesActions.classList.toggle('hidden', !lastExportedArticles.length);
+    renderExportedArticles();
+
+    const count = Number(data.count || 0);
+    const docLabel = currentFile || 'documentul activ';
+    setArticlesStatus(`Bulk export finalizat: ${count} fișiere TXT generate pentru ${docLabel}.`);
+    setStatus(`Bulk export finalizat. Am generat ${count} fișiere TXT în folderul dedicat.`);
+  } catch (err) {
+    resetArticlesExportUi();
+    const message = err.message || 'Nu am putut face bulk export TXT.';
+    setArticlesStatus(message);
+    setStatus(message);
+  } finally {
+    exportArticlesBtn.disabled = false;
+  }
 });
 
 importTxtBtn.addEventListener('click', () => {
@@ -1299,6 +1540,16 @@ importTxtInput.addEventListener('change', async () => {
   } finally {
     importTxtInput.value = '';
   }
+});
+
+viewExportedDocsBtn?.addEventListener('click', () => {
+  if (!lastExportedArticles.length) {
+    setArticlesStatus('Nu există încă fișiere exportate în această sesiune.');
+    return;
+  }
+  renderExportedArticles();
+  exportedArticlesWrap.classList.remove('hidden');
+  setArticlesStatus(`Sunt afișate ${lastExportedArticles.length} fișiere TXT din ultimul bulk export.`);
 });
 
 adminProgressLoadBtn?.addEventListener('click', async () => {
@@ -1352,6 +1603,10 @@ async function submitSplitPdf(start, end) {
   splitPdfBtn.disabled = true;
   splitSelectionPdfBtn.disabled = true;
   try {
+    const label = start === 1 && end === totalPages
+      ? 'Split-ul pentru tot PDF-ul rulează...'
+      : `Split-ul pentru paginile ${start}-${end} rulează...`;
+    showSplitProgress(label);
     saveShiftPresetForCurrentFile();
     const res = await fetch('/pdf/split', { method: 'POST', body: form });
     const data = await res.json();
@@ -1367,6 +1622,7 @@ async function submitSplitPdf(start, end) {
   } catch (err) {
     setStatus(err.message || 'Nu am putut face split pentru PDF.');
   } finally {
+    hideSplitProgress();
     splitPdfBtn.disabled = false;
     splitSelectionPdfBtn.disabled = false;
   }

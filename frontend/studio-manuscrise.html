@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OmniScan Manuscrise</title>
-  <link rel="stylesheet" href="/static/studio-manuscrise.css?v=18" />
+  <link rel="stylesheet" href="/static/studio-manuscrise.css?v=19" />
 </head>
 <body>
   <div class="shell">
@@ -43,15 +43,15 @@
           <div class="panel-head">
             <div>
               <h2>Bibliotecă PDF</h2>
-              <p>Încarcă documente și selectează rapid pagina de lucru.</p>
+              <p>Încarcă PDF-uri sau imagini și selectează rapid pagina de lucru.</p>
             </div>
             <button id="logout-btn" class="secondary-btn">Logout</button>
           </div>
 
           <div class="upload-card">
             <label class="upload-field">
-              <span>PDF-uri</span>
-              <input type="file" id="file-input" accept=".pdf,application/pdf" multiple />
+              <span>PDF sau imagini</span>
+              <input type="file" id="file-input" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp,image/tiff" multiple />
             </label>
             <button id="upload-btn" class="primary-btn">Upload</button>
           </div>
@@ -123,6 +123,7 @@
                 <select id="ocr-mode">
                   <option value="google_page">Document OCR</option>
                   <option value="scan_page">Scan cleanup</option>
+                  <option value="kraken_page">Kraken HTR</option>
                 </select>
               </label>
               <button id="run-ocr" class="primary-btn">Rulează OCR</button>
@@ -159,9 +160,14 @@
           <div class="preview-grid">
             <section class="panel preview-panel">
               <div class="panel-head">
-                <div>
+                <div class="preview-head-main">
                   <h2>Preview</h2>
                   <p id="doc-meta">Alege un PDF pentru a începe.</p>
+                  <div class="preview-zoom-controls" aria-label="Zoom preview">
+                    <button id="preview-zoom-out" type="button" class="secondary-btn icon-btn" title="Micșorează imaginea">🔍−</button>
+                    <span id="preview-zoom-label" class="pill">100%</span>
+                    <button id="preview-zoom-in" type="button" class="secondary-btn icon-btn" title="Mărește imaginea">🔍+</button>
+                  </div>
                 </div>
                 <span id="page-badge" class="pill">Pagina -</span>
               </div>
@@ -349,6 +355,6 @@
     </main>
   </div>
 
-  <script src="/static/studio-manuscrise.js?v=18"></script>
+  <script src="/static/studio-manuscrise.js?v=19"></script>
 </body>
 </html>

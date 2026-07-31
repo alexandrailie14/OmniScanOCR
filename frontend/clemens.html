@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniScan · Clemens</title>
+  <link rel="stylesheet" href="/static/clemens.css?v=3" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Statistici dicționar</p>
+        <h1>Clemens</h1>
+      </div>
+      <nav class="top-actions">
+        <a href="/dictionary">DLR</a>
+        <a href="/">OmniScan</a>
+        <button id="logoutButton" type="button">Logout</button>
+      </nav>
+    </header>
+
+    <section class="summary-grid" id="summaryGrid" aria-live="polite">
+      <article class="metric-card">
+        <span>Total intrări</span>
+        <strong id="totalEntries">-</strong>
+      </article>
+      <article class="metric-card">
+        <span>RO-DE</span>
+        <strong id="roEntries">-</strong>
+      </article>
+      <article class="metric-card">
+        <span>DE-RO</span>
+        <strong id="geEntries">-</strong>
+      </article>
+      <article class="metric-card">
+        <span>Variante legate de lemă</span>
+        <strong id="variantEntries">-</strong>
+      </article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Distribuție POS</h2>
+          <div class="segmented" id="directionTabs">
+            <button class="active" type="button" data-direction="all">Total</button>
+            <button type="button" data-direction="RO-DE">RO-DE</button>
+            <button type="button" data-direction="DE-RO">DE-RO</button>
+          </div>
+        </div>
+        <div id="posBars" class="bars"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Lungimea intrărilor</h2>
+        </div>
+        <div id="lengthBars" class="bars compact"></div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Profil interpretativ</h2>
+          <p>Statistici tematice inspirate din studiile despre Clemens și calculate pe intrările dicționarului.</p>
+        </div>
+      </div>
+      <div class="donut-grid">
+        <article class="donut-panel">
+          <div>
+            <h3>Elemente germane</h3>
+            <p id="germanElementsNote"></p>
+          </div>
+          <div id="germanElementsDonut" class="donut-chart" aria-label="Elemente germane"></div>
+          <div id="germanElementsLegend" class="donut-legend"></div>
+        </article>
+        <article class="donut-panel">
+          <div>
+            <h3>Zone tematice</h3>
+            <p id="thematicZonesNote"></p>
+          </div>
+          <div id="thematicZonesDonut" class="donut-chart" aria-label="Zone tematice"></div>
+          <div id="thematicZonesLegend" class="donut-legend"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Morfologie indicată în articole</h2>
+          <p>Statistici extrase strict din notarea dicționarului: declinări la substantive și grupe de conjugare la verbe.</p>
+        </div>
+      </div>
+      <div class="morph-grid">
+        <article class="morph-card">
+          <div class="morph-copy">
+            <span>Substantive</span>
+            <h3>Declinare indicată</h3>
+            <p id="nounDeclensionDetail"></p>
+          </div>
+          <div id="nounDeclensionCoverage" class="morph-ring" aria-label="Acoperire declinări">-</div>
+          <div id="nounDeclensionBars" class="morph-pills"></div>
+        </article>
+        <article class="morph-card">
+          <div class="morph-copy">
+            <span>Verbe</span>
+            <h3>Grupă de conjugare indicată</h3>
+            <p id="verbGroupDetail"></p>
+          </div>
+          <div id="verbGroupCoverage" class="morph-ring" aria-label="Acoperire conjugări">-</div>
+          <div id="verbGroupBars" class="morph-pills"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="dictionaryProfilePanel">
+      <div class="proper-names-shell">
+        <div class="proper-names-head">
+          <div>
+            <h3>Nume proprii</h3>
+            <p id="properNamesNote"></p>
+          </div>
+          <div class="proper-name-filters">
+            <input id="properNameSearch" type="search" placeholder="Caută nume propriu..." autocomplete="off" />
+            <select id="properNameTypeFilter" aria-label="Filtrează nume proprii după tip">
+              <option value="all">Toate tipurile</option>
+            </select>
+          </div>
+        </div>
+        <div id="properCategoryBars" class="bars compact"></div>
+        <div class="translation-techniques">
+          <div class="translation-techniques-head">
+            <div>
+              <h4>Procedee de traducere</h4>
+              <p id="translationTechniquesNote"></p>
+            </div>
+            <span id="translationTechniquesSource"></span>
+          </div>
+          <div id="translationTechniqueCards" class="translation-technique-grid"></div>
+        </div>
+        <div id="properNamesCanvas" class="proper-names-canvas"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head table-tools">
+        <div>
+          <h2>Intrări</h2>
+          <p id="statusText"></p>
+        </div>
+        <div class="filters">
+          <input id="searchInput" type="search" placeholder="Caută cuvânt, lemă sau articol..." autocomplete="off" />
+          <select id="directionFilter">
+            <option value="all">Toate direcțiile</option>
+            <option value="RO-DE">RO-DE</option>
+            <option value="DE-RO">DE-RO</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Direcție</th>
+              <th>Intrare</th>
+              <th>
+                <span class="th-filter">
+                  <span>Tip</span>
+                  <select id="typeFilter" aria-label="Filtrează după tip">
+                    <option value="all">Toate</option>
+                    <option value="lemă">Leme</option>
+                    <option value="variantă">Variante</option>
+                  </select>
+                </span>
+              </th>
+              <th>Lemă</th>
+              <th>
+                <span class="th-filter">
+                  <span>POS</span>
+                  <select id="posFilter" aria-label="Filtrează după partea de vorbire">
+                    <option value="all">Toate</option>
+                  </select>
+                </span>
+              </th>
+              <th>
+                <span class="th-filter">
+                  <span>Grupă verb</span>
+                  <select id="verbGroupFilter" aria-label="Filtrează verbele după grupă">
+                    <option value="all">Toate</option>
+                  </select>
+                </span>
+              </th>
+              <th>Cuvânt-titlu</th>
+            </tr>
+          </thead>
+          <tbody id="entriesBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="articleDialog">
+    <div class="dialog-head">
+      <div>
+        <p id="dialogMeta" class="eyebrow">Articol</p>
+        <h2 id="dialogTitle">Intrare</h2>
+      </div>
+      <button id="closeDialog" type="button">Închide</button>
+    </div>
+    <pre id="dialogText"></pre>
+  </dialog>
+
+  <dialog id="termsDialog">
+    <div class="dialog-head">
+      <div>
+        <p id="termsDialogMeta" class="eyebrow">Termeni</p>
+        <h2 id="termsDialogTitle">Categorie</h2>
+      </div>
+      <button id="closeTermsDialog" type="button">Închide</button>
+    </div>
+    <div class="terms-dialog-body">
+      <p id="termsDialogSource" class="source-note"></p>
+      <div id="termsDialogFeatured" class="terms-featured"></div>
+      <div id="termsDialogList" class="terms-scroll"></div>
+    </div>
+  </dialog>
+
+  <script src="/static/clemens.js?v=10"></script>
+</body>
+</html>

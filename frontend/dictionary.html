@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Statistici dicționar</title>
-  <link rel="stylesheet" href="/static/dictionary.css?v=43" />
+  <link rel="stylesheet" href="/static/dictionary.css?v=51" />
 </head>
 <body>
   <main class="app">
@@ -137,6 +137,7 @@
                   </span>
                 </div>
               </th>
+              <th>Frazeologie</th>
               <th>
                 <div class="type-header-inline">
                   <span>Tip</span>
@@ -171,7 +172,24 @@
         <button id="closeArticleModal" class="secondary-button" type="button">Închide</button>
       </div>
       <div id="articleModalMeta" class="article-meta"></div>
+      <div id="articleModalExtracted" class="article-extracted" hidden></div>
       <div id="articleModalBody" class="article-rich"></div>
+    </section>
+  </div>
+
+  <div id="phraseologyModal" class="article-modal" hidden>
+    <div class="article-backdrop" data-close-phraseology-modal="true"></div>
+    <section class="article-dialog phraseology-dialog" role="dialog" aria-modal="true" aria-labelledby="phraseologyModalTitle">
+      <div class="article-dialog-header">
+        <div>
+          <p class="kicker">Frazeologie</p>
+          <h2 id="phraseologyModalTitle">Expresii</h2>
+        </div>
+        <button id="closePhraseologyModal" class="secondary-button" type="button">Închide</button>
+      </div>
+      <div id="phraseologyModalMeta" class="article-meta"></div>
+      <div id="phraseologyModalFilters" class="phraseology-modal-filters" hidden></div>
+      <div id="phraseologyModalBody" class="article-extracted"></div>
     </section>
   </div>
 
@@ -198,6 +216,6 @@
     </section>
   </div>
 
-  <script src="/static/dictionary.js?v=43"></script>
+  <script src="/static/dictionary.js?v=56"></script>
 </body>
 </html>
