@@ -124,6 +124,14 @@ summary { cursor: pointer; font-weight: 600; }
         <label for="tsms">Mesaj SMS (opțional; dacă e gol, QR-ul apelează)</label><textarea id="tsms"></textarea>
       </div>
 
+      <details open>
+        <summary>Text lângă cod</summary>
+        <label for="ttitle">Titlu deasupra (opțional)</label>
+        <input id="ttitle" placeholder="ex: Votează-l pe ...">
+        <label for="tcap">Text dedesubt (opțional, Enter = rând nou)</label>
+        <textarea id="tcap" style="min-height:64px" placeholder="ex: Scanează codul și votează"></textarea>
+      </details>
+
       <details>
         <summary>Aspect</summary>
         <div class="row">
@@ -2534,24 +2542,74 @@ var qrcode = function() {
     return q;
   }
 
+  var FONT = 'Arial, Helvetica, sans-serif';
+  var measureCtx = document.createElement('canvas').getContext('2d');
+
+  function wrap(text, font, maxW) {
+    measureCtx.font = font;
+    var out = [];
+    text.split('\n').forEach(function (para) {
+      var words = para.trim().split(/\s+/), line = '';
+      if (!para.trim()) return;
+      words.forEach(function (w) {
+        var t = line ? line + ' ' + w : w;
+        if (line && measureCtx.measureText(t).width > maxW) { out.push(line); line = w; }
+        else line = t;
+      });
+      if (line) out.push(line);
+    });
+    return out;
+  }
+
+  // Layout of the optional title (above) and caption (below), in pixels for a QR block of width dim.
+  function textLayout(dim) {
+    var pad = Math.round(dim * 0.06), maxW = dim - 2 * pad;
+    var ts = Math.round(dim * 0.075), cs = Math.round(dim * 0.05);
+    var tf = 'bold ' + ts + 'px ' + FONT, cf = cs + 'px ' + FONT;
+    var tl = wrap(v('ttitle'), tf, maxW), cl = wrap($('tcap').value, cf, maxW);
+    var tlh = Math.round(ts * 1.25), clh = Math.round(cs * 1.35);
+    return {
+      pad: pad, tf: tf, cf: cf, ts: ts, cs: cs, tl: tl, cl: cl, tlh: tlh, clh: clh,
+      topH: tl.length ? pad + tl.length * tlh : 0,
+      botH: cl.length ? cl.length * clh + pad : 0
+    };
+  }
+
   function draw(canvas, q, size) {
     var n = q.getModuleCount(), m = $('margin').checked ? 4 : 0, total = n + 2 * m;
     var cell = Math.max(1, Math.floor(size / total)), dim = cell * total;
-    canvas.width = dim; canvas.height = dim;
+    var L = textLayout(dim);
+    canvas.width = dim; canvas.height = L.topH + dim + L.botH;
     var ctx = canvas.getContext('2d');
-    ctx.fillStyle = $('bgc').value; ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = $('bgc').value; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = $('fg').value;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = L.tf;
+    L.tl.forEach(function (s, i) { ctx.fillText(s, dim / 2, L.pad + i * L.tlh); });
     for (var r = 0; r < n; r++) for (var c = 0; c < n; c++)
-      if (q.isDark(r, c)) ctx.fillRect((c + m) * cell, (r + m) * cell, cell, cell);
+      if (q.isDark(r, c)) ctx.fillRect((c + m) * cell, L.topH + (r + m) * cell, cell, cell);
+    ctx.font = L.cf;
+    L.cl.forEach(function (s, i) { ctx.fillText(s, dim / 2, L.topH + dim + i * L.clh); });
   }
 
+  function xml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
   function svg(q) {
-    var n = q.getModuleCount(), m = $('margin').checked ? 4 : 0, t = n + 2 * m, d = '';
+    var n = q.getModuleCount(), m = $('margin').checked ? 4 : 0, t = n + 2 * m, k = 10, dim = t * k, d = '';
+    var L = textLayout(dim), H = L.topH + dim + L.botH, fg = $('fg').value, txt = '';
     for (var r = 0; r < n; r++) for (var c = 0; c < n; c++)
-      if (q.isDark(r, c)) d += 'M' + (c + m) + ' ' + (r + m) + 'h1v1h-1z';
-    return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + t + ' ' + t +
-      '" width="1024" height="1024" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="' + $('bgc').value +
-      '"/><path fill="' + $('fg').value + '" d="' + d + '"/></svg>';
+      if (q.isDark(r, c)) d += 'M' + (c + m) * k + ' ' + (L.topH + (r + m) * k) + 'h' + k + 'v' + k + 'h-' + k + 'z';
+    L.tl.forEach(function (s, i) {
+      txt += '<text x="' + dim / 2 + '" y="' + (L.pad + i * L.tlh + L.ts * 0.85) + '" font-size="' + L.ts +
+        '" font-weight="bold">' + xml(s) + '</text>';
+    });
+    L.cl.forEach(function (s, i) {
+      txt += '<text x="' + dim / 2 + '" y="' + (L.topH + dim + i * L.clh + L.cs * 0.85) + '" font-size="' + L.cs + '">' + xml(s) + '</text>';
+    });
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + dim + ' ' + H +
+      '" width="1024" height="' + Math.round(1024 * H / dim) + '"><rect width="100%" height="100%" fill="' + $('bgc').value +
+      '"/><path fill="' + fg + '" shape-rendering="crispEdges" d="' + d + '"/>' +
+      (txt ? '<g fill="' + fg + '" font-family="' + FONT + '" text-anchor="middle">' + txt + '</g>' : '') + '</svg>';
   }
 
   function render() {
