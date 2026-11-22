@@ -2575,7 +2575,15 @@ var qrcode = function() {
       (data.length > 80 ? data.slice(0, 80) + '…' : data);
   }
 
+  var dl = null;
+  if (window.claude && window.claude.use) window.claude.use('downloads').then(function (d) { dl = d; }).catch(function () {});
   function save(blob, name) {
+    if (dl) {
+      dl.save({ filename: name, data: blob }).catch(function (e) {
+        if (e && e.code !== 'declined') $('err').textContent = 'Descărcarea nu a reușit (' + (e.code || 'eroare') + ').';
+      });
+      return;
+    }
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
